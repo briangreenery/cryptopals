@@ -40,26 +40,30 @@ fn score(letters: &Vec<u8>) -> usize {
 struct DecryptResult {
     score: usize,
     key: u8,
-    text: Vec<u8>
+    text: Vec<u8>,
 }
 
 fn try_decrypt(cipher: &Vec<u8>) -> DecryptResult {
-   let mut best_score: usize = 0;
-   let mut best_key: u8 = 0;
-   let mut best_text: Vec<u8> = Vec::new();
-    
-   for key in (0..255) {
-       let text = decrypt(&cipher, key);
-       let score = score(&text);
-        
-       if score > best_score {
-           best_score = score;
-           best_key = key;
-           best_text = text
+    let mut best_score: usize = 0;
+    let mut best_key: u8 = 0;
+    let mut best_text: Vec<u8> = Vec::new();
+
+    for key in (0..255) {
+        let text = decrypt(&cipher, key);
+        let score = score(&text);
+
+        if score > best_score {
+            best_score = score;
+            best_key = key;
+            best_text = text
         }
     }
-    
-    DecryptResult { score: best_score, key: best_key, text: best_text }
+
+    DecryptResult {
+        score: best_score,
+        key: best_key,
+        text: best_text,
+    }
 }
 
 fn main() {
@@ -390,17 +394,21 @@ fn main() {
                    "41053f5cef5f6f56e4f5410a5407281600200b2649460a2e3a3c38492a0c",
                    "4c071a57e9356ee415103c5c53e254063f2019340969e30a2e381d5b2555",
                    "32042f46431d2c44607934ed180c1028136a5f2b26092e3b2c4e2930585a"];
-                   
-   let mut best_result = DecryptResult { score: 0, key: 0, text: Vec::new() }; 
+
+    let mut best_result = DecryptResult {
+        score: 0,
+        key: 0,
+        text: Vec::new(),
+    };
 
     for cipher in ciphers.iter() {
         let result = try_decrypt(&bytes_from_hex(cipher));
-        
+
         if result.score > best_result.score {
             best_result = result
         }
     }
-    
+
     println!("score = {}", best_result.score);
     println!("key = {}", best_result.key);
     println!("text = {}", String::from_utf8(best_result.text).unwrap());
