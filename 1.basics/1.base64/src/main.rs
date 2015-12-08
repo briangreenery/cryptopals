@@ -3,7 +3,7 @@ fn hex_digit_value(digit: u8) -> u8 {
         48...57 => digit - 48,
         65...90 => digit - 65 + 10,
         97...122 => digit - 97 + 10,
-        _ => panic!("invalid hex digit"),
+        _ => panic!("invalid hex digit")
     }
 }
 
