@@ -24,27 +24,36 @@ fn decrypt(bytes: &Vec<u8>, key: u8) -> Vec<u8> {
     result
 }
 
-fn score(letters: &Vec<u8>) -> usize {
-    letters.iter()
-           .filter(|&letter| {
-               match *letter {
-                   65...90 => true,
-                   97...122 => true,
-                   32 => true,
-                   _ => false,
-               }
-           })
-           .count()
+fn score(letters: &Vec<u8>) -> i32 {
+    let mut total: i32 = 0;
+    
+    for letter in letters.iter() {
+        match *letter {
+            b'a'...b'z' => total += 5,
+            b'A'...b'Z' => total += 5,
+            b'0'...b'9' => total += 2,
+            b' '  => total += 3,
+            b'\n' => total += 1,
+            b'\r' => total += 1,
+            b'!'  => total += 1,
+            b'.' => total += 1,
+            b'?' => total += 1,
+            0...20 => total -= 20,
+            _ => total -= 5
+        }
+    }
+    
+    total
 }
 
 struct DecryptResult {
-    score: usize,
+    score: i32,
     key: u8,
     text: Vec<u8>,
 }
 
 fn try_decrypt(cipher: &Vec<u8>) -> DecryptResult {
-    let mut best_score: usize = 0;
+    let mut best_score: i32 = 0;
     let mut best_key: u8 = 0;
     let mut best_text: Vec<u8> = Vec::new();
 
