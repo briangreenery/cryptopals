@@ -56,31 +56,31 @@ pub fn pad(bytes: &[u8], block_size: usize) -> Vec<u8> {
 
 pub fn encrypt_ecb(data: &[u8], key: &[u8]) -> Vec<u8> {
     let mut result = Vec::new();
-    
+
     for block in data.chunks(16) {
         let padded = if block.len() < 16 {
             pad(block, 16)
         } else {
             block.to_vec()
         };
-        
+
         encrypt_block(&padded, key, &mut result);
     }
-    
+
     if data.len() % 16 == 0 {
         encrypt_block(&[16; 16], key, &mut result);
     }
-    
+
     result
 }
 
 pub fn decrypt_ecb(data: &[u8], key: &[u8]) -> Vec<u8> {
     let mut result = Vec::new();
-    
+
     for block in data.chunks(16) {
         decrypt_block(block, key, &mut result);
     }
-    
+
     let size_without_padding = result.len() - (result[result.len() - 1] as usize);
     result.truncate(size_without_padding);
 
