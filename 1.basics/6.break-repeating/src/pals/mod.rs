@@ -1,5 +1,5 @@
 pub mod hex;
+pub mod base64;
 
-pub fn hello() -> &'static str {
-    &"hello"
-}
+mod hamming;
+pub use self::hamming::hamming_distance;
