@@ -80,10 +80,12 @@ fn is_admin_test() {
 fn main() {
     let oracle = Oracle::new();
 
-    let mut encrypted = oracle.encrypt(b"AAAAAAAAAAAAAAAAXadminXtrue");
+    let mut encrypted = oracle.encrypt(b"AAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    let target = b";admin=true";
 
-    encrypted[32] ^= b'X' ^ b';';
-    encrypted[38] ^= b'X' ^ b'=';
+    for i in 0..target.len() {
+        encrypted[32 + i] ^= b'A' ^ target[i];
+    }
 
     let decrypted = oracle.decrypt(&encrypted);
 
