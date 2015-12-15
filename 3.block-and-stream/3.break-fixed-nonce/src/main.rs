@@ -55,9 +55,11 @@ fn main() {
     let mut key = [0; 16];
     rand::thread_rng().fill_bytes(&mut key);
 
+    let nonce = rand::thread_rng().gen();
+
     let ciphers: Vec<Vec<u8>> = test_data()
                                     .iter()
-                                    .map(|plain| pals::aes::CTR::new(&key, 1234).apply(plain))
+                                    .map(|plain| pals::aes::CTR::new(&key, nonce).apply(plain))
                                     .collect();
 
     for cipher in ciphers {
