@@ -52,9 +52,7 @@ fn test_data() -> Vec<Vec<u8>> {
 }
 
 fn main() {
-    let mut key = [0; 16];
-    rand::thread_rng().fill_bytes(&mut key);
-
+    let key = pals::aes::random_key();
     let nonce = rand::thread_rng().gen();
 
     let ciphers: Vec<Vec<u8>> = test_data()

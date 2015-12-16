@@ -1,8 +1,10 @@
 extern crate crypto;
+extern crate rand;
 
 use std;
 use crypto::symmetriccipher::{Encryptor, Decryptor};
 use crypto::buffer::{ReadBuffer, WriteBuffer};
+use rand::Rng;
 
 pub fn encrypt_block(block: &[u8], key: &[u8], output: &mut Vec<u8>) {
     let mut encryptor = crypto::aes::ecb_encryptor(crypto::aes::KeySize::KeySize128,
@@ -166,6 +168,12 @@ pub fn decrypt_cbc(data: &[u8], key: &[u8], iv: &[u8]) -> Vec<u8> {
     result.truncate(size_without_padding);
 
     result
+}
+
+pub fn random_key() -> Vec<u8> {
+    let mut key = [0; 16];
+    rand::thread_rng().fill_bytes(&mut key);
+    key.to_vec()
 }
 
 pub struct CTR {
