@@ -52,14 +52,9 @@ impl MT19937 {
             self.index = 0;
         }
 
-        let mut y = self.state[self.index];
+        let y = self.state[self.index];
         self.index += 1;
-
-        y ^= (y >> U) & D;
-        y ^= (y << S) & B;
-        y ^= (y << T) & C;
-        y ^= y >> L;
-        y
+        temper(y)
     }
 
     fn twist(&mut self) {
