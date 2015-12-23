@@ -18,10 +18,22 @@ fn now_unix_time() -> u32 {
 }
 
 fn main() {
+    // loop {
+    //     wait_random_time();
+    //     let mut twister = pals::MT19937::new(now_unix_time());
+    //     wait_random_time();
+    //     println!("{}", twister.gen());
+    // }
+
+    let output = 2720653705;
+    let mut seed = now_unix_time();
+
     loop {
-        wait_random_time();
-        let mut twister = pals::MT19937::new(now_unix_time());
-        wait_random_time();
-        println!("{}", twister.gen());
+        if pals::MT19937::new(seed).gen() == output {
+            println!("seed was {}", seed);
+            break;
+        }
+
+        seed -= 1;
     }
 }
