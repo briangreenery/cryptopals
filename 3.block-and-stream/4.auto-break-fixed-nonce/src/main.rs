@@ -129,7 +129,7 @@ fn test_data() -> Vec<Vec<u8>> {
     ciphers.iter().map(|cipher| pals::base64::decode(cipher).unwrap()).collect()
 }
 
-fn common_length(ciphers: &Vec<Vec<u8>>) -> usize {
+fn max_length(ciphers: &Vec<Vec<u8>>) -> usize {
     let mut length = ciphers[0].len();
 
     for cipher in ciphers {
@@ -219,8 +219,7 @@ fn printable(data: &[u8], key: &[u8]) -> String {
 
 fn main() {
     let ciphers = test_data();
-    let length = common_length(&ciphers);
-    let key = guess_key(&ciphers, length);
+    let key = guess_key(&ciphers, max_length(&ciphers));
 
     for cipher in ciphers {
         println!("{}", printable(&cipher, &key));
