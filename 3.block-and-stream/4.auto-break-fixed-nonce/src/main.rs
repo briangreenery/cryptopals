@@ -133,7 +133,7 @@ fn common_length(ciphers: &Vec<Vec<u8>>) -> usize {
     let mut length = ciphers[0].len();
 
     for cipher in ciphers {
-        length = std::cmp::min(length, cipher.len());
+        length = std::cmp::max(length, cipher.len());
     }
 
     length
@@ -162,7 +162,9 @@ fn score_index(ciphers: &Vec<Vec<u8>>, index: usize, guess: u8) -> i32 {
     let mut total: i32 = 0;
 
     for cipher in ciphers {
-        total += score(cipher[index] ^ guess);
+        if cipher.len() > index {
+            total += score(cipher[index] ^ guess);
+        }
     }
 
     total
