@@ -41,7 +41,7 @@ impl MT19937 {
 
         let mut y = self.state[self.index];
         self.index += 1;
-        
+
         y ^= (y >> U) & D;
         y ^= (y << S) & B;
         y ^= (y << T) & C;
