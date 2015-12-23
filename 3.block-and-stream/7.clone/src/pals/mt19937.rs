@@ -33,6 +33,19 @@ impl MT19937 {
         mt
     }
 
+    pub fn copy(stuf: &[u32]) -> MT19937 {
+        let mut mt = MT19937 {
+            state: [0; N],
+            index: N,
+        };
+
+        for i in 0..N {
+            mt.state[i] = untemper(stuf[i]);
+        }
+
+        mt
+    }
+
     pub fn gen(&mut self) -> u32 {
         if self.index >= N {
             self.twist();
@@ -66,36 +79,41 @@ impl MT19937 {
 
 pub fn temper(value: u32) -> u32 {
     let mut y = value;
-    
+
     y ^= (y >> U) & D;
     y ^= (y << S) & B;
     y ^= (y << T) & C;
     y ^= y >> L;
-    
+
     y
 }
 
 pub fn untemper(value: u32) -> u32 {
     let mut y = value;
-    
+
+    // Undo: y ^= y >> L;
     y ^= (y & !(0xFFFFFFFF >> L)) >> L;
+
+    // Undo: y ^= (y << T) & C;
     y ^= ((y & !((0xFFFFFFFF << T) & C)) << T) & C;
-    
+
+    // Undo: y ^= (y << S) & B;
     {
         let mask = !(0xFFFFFFFF << S);
-        
+
         let a = y & mask;
         let b = (y ^ ((a << S) & B)) & (mask << S) | a;
         let c = (y ^ ((b << S) & B)) & (mask << (2 * S)) | b;
         let d = (y ^ ((c << S) & B)) & (mask << (3 * S)) | c;
         y ^= (d << S) & B;
     }
-    
+
+    // Undo: y ^= (y >> U) & D;
     {
         let a = y & !(0xFFFFFFFF >> U);
         let b = (y ^ (a >> U)) & !(0xFFFFFFFF >> (2 * U));
         let c = y ^ (b >> U);
-        
+
         y = c;
     }
 
