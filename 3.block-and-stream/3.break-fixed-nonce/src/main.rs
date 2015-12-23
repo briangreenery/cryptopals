@@ -5,6 +5,8 @@ extern crate crypto;
 extern crate rand;
 
 use rand::Rng;
+use std::io;
+use std::io::Write;
 
 fn test_data() -> Vec<Vec<u8>> {
     let strings = ["SSBoYXZlIG1ldCB0aGVtIGF0IGNsb3NlIG9mIGRheQ==",
@@ -51,6 +53,44 @@ fn test_data() -> Vec<Vec<u8>> {
     strings.iter().map(|string| pals::base64::decode(string).unwrap()).collect()
 }
 
+fn get_input() -> String {
+    let mut line = String::new();
+    io::stdin().read_line(&mut line).unwrap();
+    line
+}
+
+fn printable(data: &[u8], key: &[u8]) -> String {
+    let mut result = Vec::new();
+
+    for (index, encrypted) in data.iter().enumerate() {
+        let byte = encrypted ^ key[index];
+
+        if byte >= 32 && byte <= 127 {
+            result.push(byte);
+        } else {
+            result.push(b'.');
+        }
+    }
+
+    String::from_utf8(result).unwrap()
+}
+
+fn any_bad(ciphers: &Vec<Vec<u8>>, key: &[u8], index: usize) -> bool {
+    for cipher in ciphers {
+        if cipher.len() <= index {
+            continue;
+        }
+
+        let byte = cipher[index] ^ key[index];
+
+        if byte > 127 {
+            return true;
+        }
+    }
+
+    false
+}
+
 fn main() {
     let key = pals::aes::random_key();
     let nonce = rand::thread_rng().gen();
@@ -60,7 +100,62 @@ fn main() {
                                     .map(|plain| pals::aes::CTR::new(&key, nonce).apply(plain))
                                     .collect();
 
-    for cipher in ciphers {
-        println!("{}", pals::hex::encode(&cipher));
+    let mut key = [0; 64];
+    let mut index = 0;
+
+    loop {
+        println!("{}", pals::hex::encode(&key));
+
+        for cipher in &ciphers {
+            println!("{}", printable(&cipher, &key));
+        }
+
+        println!("----------");
+        println!("n = next, p = prev, r = right, l = left");
+        print!("Command for column {}: ", index);
+        io::stdout().flush().unwrap();
+
+        let guess = get_input();
+
+        match guess.trim() {
+            "n" => {
+                let prev = key[index];
+
+                loop {
+                    if key[index] == 255 {
+                        key[index] = 0;
+                    } else {
+                        key[index] += 1;
+                    }
+
+                    if !any_bad(&ciphers, &key, index) {
+                        break;
+                    }
+
+                    if key[index] == prev {
+                        break;
+                    }
+                }
+            }
+            "p" => {
+                if key[index] == 0 {
+                    key[index] = 255;
+                } else {
+                    key[index] -= 1;
+                }
+            }
+            "r" => {
+                index += 1;
+            }
+            "l" => {
+                index -= 1;
+            }
+            "q" => {
+                break;
+            }
+            _ => {
+                println!("unknown command");
+            }
+        }
     }
 }
