@@ -12,14 +12,14 @@ const M: usize = 397;
 const LOWER_MASK: u32 = 0x7fffffff;
 const UPPER_MASK: u32 = 0x80000000;
 
-pub struct MT19337 {
+pub struct MT19937 {
     state: [u32; N],
     index: usize,
 }
 
-impl MT19337 {
-    pub fn new(seed: u32) -> MT19337 {
-        let mut mt = MT19337 {
+impl MT19937 {
+    pub fn new(seed: u32) -> MT19937 {
+        let mut mt = MT19937 {
             state: [0; N],
             index: N,
         };

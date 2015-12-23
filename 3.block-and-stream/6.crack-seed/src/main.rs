@@ -20,7 +20,7 @@ fn now_unix_time() -> u32 {
 fn main() {
     loop {
         wait_random_time();
-        let mut twister = pals::MT19337::new(now_unix_time());
+        let mut twister = pals::MT19937::new(now_unix_time());
         wait_random_time();
         println!("{}", twister.gen());
     }
