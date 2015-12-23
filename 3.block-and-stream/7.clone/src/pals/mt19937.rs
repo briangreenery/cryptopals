@@ -33,14 +33,14 @@ impl MT19937 {
         mt
     }
 
-    pub fn copy(stuf: &[u32]) -> MT19937 {
+    pub fn clone_from(output: &[u32]) -> MT19937 {
         let mut mt = MT19937 {
             state: [0; N],
             index: N,
         };
 
         for i in 0..N {
-            mt.state[i] = untemper(stuf[i]);
+            mt.state[i] = untemper(output[i]);
         }
 
         mt

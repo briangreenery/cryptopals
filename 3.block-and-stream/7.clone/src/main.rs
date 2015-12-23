@@ -30,7 +30,7 @@ fn main() {
         output[i] = original.gen();
     }
 
-    let mut copy = pals::MT19937::copy(&output);
+    let mut copy = pals::MT19937::clone_from(&output);
 
     for _i in 0..10 {
         println!("original: {}", original.gen());
