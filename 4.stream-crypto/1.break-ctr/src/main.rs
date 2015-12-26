@@ -65,5 +65,17 @@ fn test_data() -> Vec<u8> {
 
 fn main() {
     let plain = pals::aes::decrypt_ecb(&test_data(), b"YELLOW SUBMARINE");
-    println!("{}", String::from_utf8(plain).unwrap());
+
+    let key = pals::aes::random_key();
+    let ctr = pals::aes::CTR::new(&key, 1234);
+
+    let cipher = ctr.apply(&plain);
+    let zero = vec![0; cipher.len()];
+
+    let key_stream = ctr.edit(&cipher, 0, &zero);
+
+    let mut decrypted = cipher.clone();
+    pals::aes::xor(&key_stream, &mut decrypted);
+
+    println!("{}", String::from_utf8(decrypted).unwrap());
 }

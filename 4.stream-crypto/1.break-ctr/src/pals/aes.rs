@@ -179,7 +179,6 @@ pub fn random_key() -> Vec<u8> {
 pub struct CTR {
     key: Vec<u8>,
     nonce: i64,
-    count: i64,
 }
 
 impl CTR {
@@ -187,11 +186,10 @@ impl CTR {
         CTR {
             key: key.to_vec(),
             nonce: nonce,
-            count: 0,
         }
     }
 
-    fn next(&mut self) -> Vec<u8> {
+    fn block(&self, count: i64) -> Vec<u8> {
         let mut block: [u8; 16] = [0; 16];
 
         for i in 0..8 {
@@ -199,23 +197,55 @@ impl CTR {
         }
 
         for i in 0..8 {
-            block[8 + i] = ((self.count >> (8 * i)) & 0xff) as u8;
+            block[8 + i] = ((count >> (8 * i)) & 0xff) as u8;
         }
 
         let mut result = Vec::new();
         encrypt_block(&block, &self.key, &mut result);
-        self.count += 1;
+        result
+    }
+
+    pub fn apply(&self, data: &[u8]) -> Vec<u8> {
+        let mut result = Vec::new();
+
+        for (count, block) in data.chunks(16).enumerate() {
+            let mut next = self.block(count as i64);
+            xor(block, &mut next);
+            result.extend(&next[0..block.len()]);
+        }
 
         result
     }
 
-    pub fn apply(&mut self, data: &[u8]) -> Vec<u8> {
+    pub fn edit(&self, old: &[u8], offset: usize, new: &[u8]) -> Vec<u8> {
         let mut result = Vec::new();
 
-        for block in data.chunks(16) {
-            let mut next = self.next();
-            xor(block, &mut next);
-            result.extend(&next[0..block.len()]);
+        if offset != 0 {
+            result.extend(&old[..offset]);
+        }
+
+        if result.len() % 16 != 0 {
+            let mut block = self.block((result.len() / 16) as i64);
+
+            let block_start = result.len() % 16;
+            let len = std::cmp::min(new.len(), 16 - block_start);
+
+            xor(&new[..len], &mut block[block_start..]);
+            result.extend(&block[block_start..block_start + len]);
+        }
+
+        while result.len() != offset + new.len() {
+            let mut block = self.block((result.len() / 16) as i64);
+
+            let new_start = result.len() - offset;
+            let len = std::cmp::min(16, new.len() - new_start);
+
+            xor(&new[new_start..new_start + len], &mut block[..len]);
+            result.extend(&block[..len]);
+        }
+
+        if offset + new.len() < old.len() {
+            result.extend(&old[offset + new.len()..]);
         }
 
         result
