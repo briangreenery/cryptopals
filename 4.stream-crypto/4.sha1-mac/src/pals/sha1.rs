@@ -8,7 +8,7 @@ const K1: u32 = 0x6ED9EBA1;
 const K2: u32 = 0x8F1BBCDC;
 const K3: u32 = 0xCA62C1D6;
 
-struct Hasher {
+pub struct Hasher {
     state: [u32; 5],
     data_len: usize,
     buffer: [u32; 16],
@@ -20,7 +20,7 @@ fn rotate_left(num: u32, amount: u8) -> u32 {
 }
 
 impl Hasher {
-    fn new() -> Hasher {
+    pub fn new() -> Hasher {
         Hasher {
             state: [I0, I1, I2, I3, I4],
             data_len: 0,
