@@ -7,3 +7,4 @@ authors = ["Brian Green <briangreenery@gmail.com>"]
 rust-crypto = "^0.2"
 rand = "0.3"
 time = "0.1"
+hyper = "0.7.2"
