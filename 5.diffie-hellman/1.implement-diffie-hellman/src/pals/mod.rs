@@ -10,3 +10,6 @@ pub use self::hamming::hamming_distance;
 
 pub mod sha1;
 pub mod md4;
+
+pub mod bn;
+pub use self::bn::BigNum;
