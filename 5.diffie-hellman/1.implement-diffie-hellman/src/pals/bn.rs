@@ -47,8 +47,20 @@ impl BigNum {
             bytes.pop();
         }
 
+        if bytes.len() == 0 {
+            bytes.push(0);
+        }
+
         bytes.reverse();
         bytes
+    }
+
+    fn digit(&self, index: usize) -> u64 {
+        *self.digits.get(index).unwrap_or(&0)
+    }
+
+    fn len(&self) -> usize {
+        self.digits.len()
     }
 
     fn ensure_digit_at(&mut self, index: usize) {
@@ -85,12 +97,38 @@ impl BigNum {
         }
     }
 
-    pub fn digit(&self, index: usize) -> u64 {
-        *self.digits.get(index).unwrap_or(&0)
+    fn can_sub(&self, rhs: &Self) -> bool {
+        self >= rhs
     }
 
-    pub fn len(&self) -> usize {
-        self.digits.len()
+    fn sub_digit(&mut self, index: usize, amount: u64) -> u64 {
+        let overflow = amount > self.digits[index];
+        self.digits[index] = self.digits[index].wrapping_sub(amount);
+
+        if overflow {
+            1
+        } else {
+            0
+        }
+    }
+
+    pub fn sub(&mut self, rhs: &Self) {
+        if !self.can_sub(rhs) {
+            panic!("cannot subtract larger value");
+        }
+
+        let mut carry = 0;
+        let mut index = 0;
+
+        for &digit in rhs.digits.iter() {
+            carry = self.sub_digit(index, carry) + self.sub_digit(index, digit);
+            index += 1;
+        }
+
+        while carry != 0 {
+            carry = self.sub_digit(index, carry);
+            index += 1;
+        }
     }
 }
 
@@ -215,5 +253,32 @@ mod tests {
 
         a.add(&b);
         assert_eq!(encode(&a.as_bytes()), "0100000000000000000000000000000000");
+    }
+
+    #[test]
+    fn sub() {
+        let mut a = BigNum::from_bytes(&decode("01").unwrap());
+        let b = BigNum::from_bytes(&decode("01").unwrap());
+
+        a.sub(&b);
+        assert_eq!(encode(&a.as_bytes()), "00");
+    }
+
+    #[test]
+    fn sub_with_carry() {
+        let mut a = BigNum::from_bytes(&decode("0100000000000000000000000000000000").unwrap());
+        let b = BigNum::from_bytes(&decode("01").unwrap());
+
+        a.sub(&b);
+        assert_eq!(encode(&a.as_bytes()), "ffffffffffffffffffffffffffffffff");
+    }
+
+    #[test]
+    #[should_panic]
+    fn sub_negative() {
+        let mut a = BigNum::from_bytes(&decode("01").unwrap());
+        let b = BigNum::from_bytes(&decode("02").unwrap());
+
+        a.sub(&b);
     }
 }
