@@ -1,3 +1,5 @@
+use std::cmp::min;
+
 pub struct BigNum {
     digits: Vec<u64>,
 }
@@ -7,29 +9,29 @@ impl BigNum {
         BigNum { digits: Vec::new() }
     }
 
-    pub fn from_hex(hex: &str) -> Result<BigNum, super::hex::Error> {
-        let mut decoded = try!(super::hex::decode(&hex));
-        decoded.reverse();
-
+    pub fn from_bytes(bytes: &[u8]) -> BigNum {
         let mut digits = Vec::new();
+        let mut index = 0;
 
-        for chunk in decoded.chunks(8) {
+        while index < bytes.len() {
             let mut digit = 0;
 
-            for i in (0..8).rev() {
-                if i < chunk.len() {
-                    digit *= 256;
-                    digit += chunk[i] as u64;
-                }
+            let start = bytes.len() - min(index + 8, bytes.len());
+            let end = bytes.len() - index;
+
+            for i in start..end {
+                digit *= 256;
+                digit += bytes[i] as u64;
             }
 
             digits.push(digit);
+            index += 8;
         }
 
-        Ok(BigNum { digits: digits })
+        BigNum { digits: digits }
     }
 
-    pub fn to_hex(&self) -> String {
+    pub fn as_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
         for digit in self.digits.iter() {
@@ -46,10 +48,10 @@ impl BigNum {
         }
 
         bytes.reverse();
-        super::hex::encode(&bytes)
+        bytes
     }
 
-    fn add_to(&mut self, index: usize, amount: u64) -> u64 {
+    fn add_digit(&mut self, index: usize, amount: u64) -> u64 {
         let value = self.digits[index];
 
         if value > u64::max_value() - amount {
@@ -70,12 +72,12 @@ impl BigNum {
                 self.digits.push(0);
             }
 
-            carry = self.add_to(index, carry);
+            carry = self.add_digit(index, carry);
 
             if index < amount.digits.len() {
-                carry += self.add_to(index, amount.digits[index]);
+                carry += self.add_digit(index, amount.digits[index]);
             }
-            
+
             index += 1;
         }
     }
@@ -84,43 +86,44 @@ impl BigNum {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::hex::*;
 
     #[test]
     fn hex_small() {
-        let a = BigNum::from_hex("0000000000000000000001").unwrap();
-        assert_eq!(a.to_hex(), "01");
+        let a = BigNum::from_bytes(&decode("0000000000000000000001").unwrap());
+        assert_eq!(encode(&a.as_bytes()), "01");
     }
 
     #[test]
     fn hex_large() {
-        let a = BigNum::from_hex("0100000000000000000000").unwrap();
-        assert_eq!(a.to_hex(), "0100000000000000000000");
+        let a = BigNum::from_bytes(&decode("0100000000000000000000").unwrap());
+        assert_eq!(encode(&a.as_bytes()), "0100000000000000000000");
     }
 
     #[test]
     fn add() {
-        let mut a = BigNum::from_hex("01").unwrap();
-        let b = BigNum::from_hex("01").unwrap();
+        let mut a = BigNum::from_bytes(&decode("01").unwrap());
+        let b = BigNum::from_bytes(&decode("01").unwrap());
 
         a.add(&b);
-        assert_eq!(a.to_hex(), "02");
+        assert_eq!(encode(&a.as_bytes()), "02");
     }
 
     #[test]
     fn add_with_carry1() {
-        let mut a = BigNum::from_hex("ffffffffffffffff").unwrap();
-        let b = BigNum::from_hex("01").unwrap();
+        let mut a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
+        let b = BigNum::from_bytes(&decode("01").unwrap());
 
         a.add(&b);
-        assert_eq!(a.to_hex(), "010000000000000000");
+        assert_eq!(encode(&a.as_bytes()), "010000000000000000");
     }
 
     #[test]
     fn add_with_carry2() {
-        let mut a = BigNum::from_hex("ffffffffffffffff").unwrap();
-        let b = BigNum::from_hex("ffffffffffffffff").unwrap();
+        let mut a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
+        let b = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
 
         a.add(&b);
-        assert_eq!(a.to_hex(), "01fffffffffffffffe");
+        assert_eq!(encode(&a.as_bytes()), "01fffffffffffffffe");
     }
 }
