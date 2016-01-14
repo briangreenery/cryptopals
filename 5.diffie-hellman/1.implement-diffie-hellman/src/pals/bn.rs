@@ -43,7 +43,7 @@ impl BigNum {
             }
         }
 
-        while bytes.len() > 0 && bytes[bytes.len() - 1] == 0 {
+        while *bytes.last().unwrap_or(&1) == 0 {
             bytes.pop();
         }
 
@@ -51,14 +51,21 @@ impl BigNum {
         bytes
     }
 
-    fn add_digit(&mut self, index: usize, amount: u64) -> u64 {
-        let value = self.digits[index];
+    fn ensure_digit_at(&mut self, index: usize) {
+        while self.digits.len() <= index {
+            self.digits.push(0);
+        }
+    }
 
-        if value > u64::max_value() - amount {
-            self.digits[index] = value - (u64::max_value() - amount) - 1;
+    fn add_digit(&mut self, index: usize, amount: u64) -> u64 {
+        self.ensure_digit_at(index);
+
+        let overflow = self.digits[index] > u64::max_value() - amount;
+        self.digits[index] = self.digits[index].wrapping_add(amount);
+
+        if overflow {
             1
         } else {
-            self.digits[index] = value + amount;
             0
         }
     }
@@ -67,17 +74,13 @@ impl BigNum {
         let mut carry = 0;
         let mut index = 0;
 
-        while carry > 0 || index < amount.digits.len() {
-            if self.digits.len() <= index {
-                self.digits.push(0);
-            }
+        for &digit in amount.digits.iter() {
+            carry = self.add_digit(index, carry) + self.add_digit(index, digit);
+            index += 1;
+        }
 
+        while carry != 0 {
             carry = self.add_digit(index, carry);
-
-            if index < amount.digits.len() {
-                carry += self.add_digit(index, amount.digits[index]);
-            }
-
             index += 1;
         }
     }
@@ -125,5 +128,23 @@ mod tests {
 
         a.add(&b);
         assert_eq!(encode(&a.as_bytes()), "01fffffffffffffffe");
+    }
+
+    #[test]
+    fn add_with_carry3() {
+        let mut a = BigNum::from_bytes(&decode("ffffffffffffffffffffffffffffffff").unwrap());
+        let b = BigNum::from_bytes(&decode("ffffffffffffffffffffffffffffffff").unwrap());
+
+        a.add(&b);
+        assert_eq!(encode(&a.as_bytes()), "01fffffffffffffffffffffffffffffffe");
+    }
+
+    #[test]
+    fn add_with_carry4() {
+        let mut a = BigNum::from_bytes(&decode("ffffffffffffffffffffffffffffffff").unwrap());
+        let b = BigNum::from_bytes(&decode("01").unwrap());
+
+        a.add(&b);
+        assert_eq!(encode(&a.as_bytes()), "0100000000000000000000000000000000");
     }
 }
