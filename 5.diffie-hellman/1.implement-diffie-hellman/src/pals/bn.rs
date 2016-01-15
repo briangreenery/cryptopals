@@ -1,5 +1,21 @@
 use std::cmp::{min, max, Ordering, Eq, Ord, PartialEq, PartialOrd};
 
+fn load32(digits: &[u64], index: usize) -> u64 {
+    if index % 2 == 0 {
+        digits[index / 2] & 0xffffffff
+    } else {
+        digits[index / 2] >> 32
+    }
+}
+
+fn store32(digits: &mut [u64], index: usize, value: u64) {
+    if index % 2 == 0 {
+        digits[index / 2] = (digits[index / 2] & 0xffffffff00000000) | value;
+    } else {
+        digits[index / 2] = (digits[index / 2] & 0x00000000ffffffff) | (value << 32);
+    }
+}
+
 pub struct BigNum {
     digits: Vec<u64>,
 }
@@ -129,6 +145,34 @@ impl BigNum {
             carry = self.sub_digit(index, carry);
             index += 1;
         }
+    }
+
+    pub fn mul(&mut self, rhs: &Self) {
+        let mut out_digits = vec![0; self.len() + rhs.len() + 1];
+
+        {
+            let lhs_digits = &self.digits;
+            let rhs_digits = &rhs.digits;
+
+            for lhs_index in 0..2 * lhs_digits.len() {
+                let lhs_value = load32(lhs_digits, lhs_index);
+                let mut carry = 0;
+
+                for rhs_index in 0..2 * rhs_digits.len() {
+                    let rhs_value = load32(rhs_digits, rhs_index);
+                    let out_value = load32(&out_digits, lhs_index + rhs_index);
+
+                    let product = lhs_value * rhs_value + out_value + carry;
+
+                    store32(&mut out_digits, lhs_index + rhs_index, product & 0xffffffff);
+                    carry = product >> 32;
+                }
+
+                store32(&mut out_digits, lhs_index + 2 * rhs_digits.len(), carry);
+            }
+        }
+
+        self.digits = out_digits;
     }
 }
 
@@ -280,5 +324,48 @@ mod tests {
         let b = BigNum::from_bytes(&decode("02").unwrap());
 
         a.sub(&b);
+    }
+
+    #[test]
+    fn mul() {
+        let mut a = BigNum::from_bytes(&decode("02").unwrap());
+        let b = BigNum::from_bytes(&decode("03").unwrap());
+
+        a.mul(&b);
+        assert_eq!(encode(&a.as_bytes()), "06");
+    }
+
+    #[test]
+    fn mul_big() {
+        let mut a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
+        let b = BigNum::from_bytes(&decode("02").unwrap());
+
+        a.mul(&b);
+        assert_eq!(encode(&a.as_bytes()), "01fffffffffffffffe");
+    }
+
+    #[test]
+    fn mul_big2() {
+        let mut a = BigNum::from_bytes(&decode("ff01020304050607").unwrap());
+        let b = BigNum::from_bytes(&decode("ff01020304050607").unwrap());
+
+        for _ in 0..999 {
+            a.add(&b);
+        }
+
+        let mut c = BigNum::from_bytes(&decode("ff01020304050607").unwrap());
+        let d = BigNum::from_bytes(&decode("03e8").unwrap());
+
+        c.mul(&d);
+        assert_eq!(encode(&a.as_bytes()), encode(&c.as_bytes()));
+    }
+
+    #[test]
+    fn mul_big3() {
+        let mut a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
+        let b = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
+
+        a.mul(&b);
+        assert_eq!(encode(&a.as_bytes()), "fffffffffffffffe0000000000000001");
     }
 }
