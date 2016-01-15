@@ -1,23 +1,7 @@
 use std::cmp::{min, max, Ordering, Eq, Ord, PartialEq, PartialOrd};
 
-fn load32(digits: &[u64], index: usize) -> u64 {
-    if index % 2 == 0 {
-        digits[index / 2] & 0xffffffff
-    } else {
-        digits[index / 2] >> 32
-    }
-}
-
-fn store32(digits: &mut [u64], index: usize, value: u64) {
-    if index % 2 == 0 {
-        digits[index / 2] = (digits[index / 2] & 0xffffffff00000000) | value;
-    } else {
-        digits[index / 2] = (digits[index / 2] & 0x00000000ffffffff) | (value << 32);
-    }
-}
-
 pub struct BigNum {
-    digits: Vec<u64>,
+    digits: Vec<u32>,
 }
 
 impl BigNum {
@@ -32,16 +16,16 @@ impl BigNum {
         while index < bytes.len() {
             let mut digit = 0;
 
-            let start = bytes.len() - min(index + 8, bytes.len());
+            let start = bytes.len() - min(index + 4, bytes.len());
             let end = bytes.len() - index;
 
             for i in start..end {
                 digit *= 256;
-                digit += bytes[i] as u64;
+                digit += bytes[i] as u32;
             }
 
             digits.push(digit);
-            index += 8;
+            index += 4;
         }
 
         BigNum { digits: digits }
@@ -53,7 +37,7 @@ impl BigNum {
         for digit in self.digits.iter() {
             let mut value = *digit;
 
-            for _ in 0..8 {
+            for _ in 0..4 {
                 bytes.push((value % 256) as u8);
                 value /= 256;
             }
@@ -71,7 +55,7 @@ impl BigNum {
         bytes
     }
 
-    fn digit(&self, index: usize) -> u64 {
+    fn digit(&self, index: usize) -> u32 {
         *self.digits.get(index).unwrap_or(&0)
     }
 
@@ -85,10 +69,10 @@ impl BigNum {
         }
     }
 
-    fn add_digit(&mut self, index: usize, amount: u64) -> u64 {
+    fn add_digit(&mut self, index: usize, amount: u32) -> u32 {
         self.ensure_digit_at(index);
 
-        let overflow = self.digits[index] > u64::max_value() - amount;
+        let overflow = self.digits[index] > u32::max_value() - amount;
         self.digits[index] = self.digits[index].wrapping_add(amount);
 
         if overflow {
@@ -117,7 +101,7 @@ impl BigNum {
         self >= rhs
     }
 
-    fn sub_digit(&mut self, index: usize, amount: u64) -> u64 {
+    fn sub_digit(&mut self, index: usize, amount: u32) -> u32 {
         let overflow = amount > self.digits[index];
         self.digits[index] = self.digits[index].wrapping_sub(amount);
 
@@ -151,24 +135,21 @@ impl BigNum {
         let mut out_digits = vec![0; self.len() + rhs.len() + 1];
 
         {
-            let lhs_digits = &self.digits;
-            let rhs_digits = &rhs.digits;
-
-            for lhs_index in 0..2 * lhs_digits.len() {
-                let lhs_value = load32(lhs_digits, lhs_index);
+            for (lhs_index, lhs_digit) in self.digits.iter().enumerate() {
+                let lhs_value = *lhs_digit as u64;
                 let mut carry = 0;
 
-                for rhs_index in 0..2 * rhs_digits.len() {
-                    let rhs_value = load32(rhs_digits, rhs_index);
-                    let out_value = load32(&out_digits, lhs_index + rhs_index);
+                for (rhs_index, rhs_digit) in rhs.digits.iter().enumerate() {
+                    let rhs_value = *rhs_digit as u64;
+                    let out_value = out_digits[lhs_index + rhs_index] as u64;
 
                     let product = lhs_value * rhs_value + out_value + carry;
 
-                    store32(&mut out_digits, lhs_index + rhs_index, product & 0xffffffff);
+                    out_digits[lhs_index + rhs_index] = (product & 0xffffffff) as u32;
                     carry = product >> 32;
                 }
 
-                store32(&mut out_digits, lhs_index + 2 * rhs_digits.len(), carry);
+                out_digits[lhs_index + rhs.digits.len()] = carry as u32;
             }
         }
 
