@@ -1,5 +1,120 @@
 use std::cmp::{min, max, Ordering, Eq, Ord, PartialEq, PartialOrd};
 
+fn truncate_zeroes<T: Eq + From<u8>>(digits: &mut Vec<T>) {
+    let mut count = digits.len();
+
+    for digit in digits.iter().rev() {
+        if *digit != T::from(0) {
+            break;
+        }
+
+        count -= 1;
+    }
+
+    digits.truncate(count);
+}
+
+fn cmp(lhs: &[u32], rhs: &[u32]) -> Ordering {
+    let max_len = max(lhs.len(), rhs.len());
+
+    for i in (0..max_len).rev() {
+        let lhs_digit = *lhs.get(i).unwrap_or(&0);
+        let rhs_digit = *rhs.get(i).unwrap_or(&0);
+
+        let order = lhs_digit.cmp(&rhs_digit);
+
+        if order != Ordering::Equal {
+            return order;
+        }
+    }
+
+    Ordering::Equal
+}
+
+fn add_digit(out: &mut Vec<u32>, i: usize, num: u32) -> u32 {
+    let overflow = out[i] > u32::max_value() - num;
+    out[i] = out[i].wrapping_add(num);
+
+    if overflow {
+        1
+    } else {
+        0
+    }
+}
+
+fn add(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
+    let mut out = vec![0; max(lhs.len(), rhs.len()) + 1];
+    let mut carry = 0;
+
+    for i in 0..out.len() {
+        carry = add_digit(&mut out, i, carry);
+
+        if i < lhs.len() {
+            carry += add_digit(&mut out, i, lhs[i])
+        }
+
+        if i < rhs.len() {
+            carry += add_digit(&mut out, i, rhs[i]);
+        }
+    }
+
+    truncate_zeroes(&mut out);
+    out
+}
+
+fn sub_digit(out: &mut Vec<u32>, i: usize, num: u32) -> u32 {
+    let overflow = num > out[i];
+    out[i] = out[i].wrapping_sub(num);
+
+    if overflow {
+        1
+    } else {
+        0
+    }
+}
+
+fn sub(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
+    if cmp(lhs, rhs) == Ordering::Less {
+        panic!("cannot subtract larger value");
+    }
+
+    let mut out = lhs.to_vec();
+    let mut carry = 0;
+
+    for i in 0..out.len() {
+        carry = sub_digit(&mut out, i, carry);
+
+        if i < rhs.len() {
+            carry += sub_digit(&mut out, i, rhs[i]);
+        }
+    }
+
+    out
+}
+
+fn mul(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
+    let mut out = vec![0; lhs.len() + rhs.len() + 1];
+
+    for (lhs_index, lhs_digit) in lhs.iter().enumerate() {
+        let lhs_value = *lhs_digit as u64;
+        let mut carry = 0;
+
+        for (rhs_index, rhs_digit) in rhs.iter().enumerate() {
+            let rhs_value = *rhs_digit as u64;
+            let out_value = out[lhs_index + rhs_index] as u64;
+
+            let product = lhs_value * rhs_value + out_value + carry;
+
+            out[lhs_index + rhs_index] = (product & 0xffffffff) as u32;
+            carry = product >> 32;
+        }
+
+        out[lhs_index + rhs.len()] = carry as u32;
+    }
+
+    out
+}
+
 pub struct BigNum {
     digits: Vec<u32>,
 }
@@ -43,9 +158,7 @@ impl BigNum {
             }
         }
 
-        while *bytes.last().unwrap_or(&1) == 0 {
-            bytes.pop();
-        }
+        truncate_zeroes(&mut bytes);
 
         if bytes.len() == 0 {
             bytes.push(0);
@@ -55,121 +168,22 @@ impl BigNum {
         bytes
     }
 
-    fn digit(&self, index: usize) -> u32 {
-        *self.digits.get(index).unwrap_or(&0)
+    pub fn add(&self, rhs: &Self) -> Self {
+        BigNum { digits: add(&self.digits, &rhs.digits) }
     }
 
-    fn len(&self) -> usize {
-        self.digits.len()
+    pub fn sub(&self, rhs: &Self) -> Self {
+        BigNum { digits: sub(&self.digits, &rhs.digits) }
     }
 
-    fn ensure_digit_at(&mut self, index: usize) {
-        while self.digits.len() <= index {
-            self.digits.push(0);
-        }
-    }
-
-    fn add_digit(&mut self, index: usize, amount: u32) -> u32 {
-        self.ensure_digit_at(index);
-
-        let overflow = self.digits[index] > u32::max_value() - amount;
-        self.digits[index] = self.digits[index].wrapping_add(amount);
-
-        if overflow {
-            1
-        } else {
-            0
-        }
-    }
-
-    pub fn add(&mut self, rhs: &Self) {
-        let mut carry = 0;
-        let mut index = 0;
-
-        for &digit in rhs.digits.iter() {
-            carry = self.add_digit(index, carry) + self.add_digit(index, digit);
-            index += 1;
-        }
-
-        while carry != 0 {
-            carry = self.add_digit(index, carry);
-            index += 1;
-        }
-    }
-
-    fn can_sub(&self, rhs: &Self) -> bool {
-        self >= rhs
-    }
-
-    fn sub_digit(&mut self, index: usize, amount: u32) -> u32 {
-        let overflow = amount > self.digits[index];
-        self.digits[index] = self.digits[index].wrapping_sub(amount);
-
-        if overflow {
-            1
-        } else {
-            0
-        }
-    }
-
-    pub fn sub(&mut self, rhs: &Self) {
-        if !self.can_sub(rhs) {
-            panic!("cannot subtract larger value");
-        }
-
-        let mut carry = 0;
-        let mut index = 0;
-
-        for &digit in rhs.digits.iter() {
-            carry = self.sub_digit(index, carry) + self.sub_digit(index, digit);
-            index += 1;
-        }
-
-        while carry != 0 {
-            carry = self.sub_digit(index, carry);
-            index += 1;
-        }
-    }
-
-    pub fn mul(&mut self, rhs: &Self) {
-        let mut out_digits = vec![0; self.len() + rhs.len() + 1];
-
-        {
-            for (lhs_index, lhs_digit) in self.digits.iter().enumerate() {
-                let lhs_value = *lhs_digit as u64;
-                let mut carry = 0;
-
-                for (rhs_index, rhs_digit) in rhs.digits.iter().enumerate() {
-                    let rhs_value = *rhs_digit as u64;
-                    let out_value = out_digits[lhs_index + rhs_index] as u64;
-
-                    let product = lhs_value * rhs_value + out_value + carry;
-
-                    out_digits[lhs_index + rhs_index] = (product & 0xffffffff) as u32;
-                    carry = product >> 32;
-                }
-
-                out_digits[lhs_index + rhs.digits.len()] = carry as u32;
-            }
-        }
-
-        self.digits = out_digits;
+    pub fn mul(&self, rhs: &Self) -> Self {
+        BigNum { digits: mul(&self.digits, &rhs.digits) }
     }
 }
 
 impl Ord for BigNum {
     fn cmp(&self, other: &Self) -> Ordering {
-        let max_len = max(self.len(), other.len());
-
-        for n in (0..max_len).rev() {
-            let order = self.digit(n).cmp(&other.digit(n));
-
-            if order != Ordering::Equal {
-                return order;
-            }
-        }
-
-        Ordering::Equal
+        cmp(&self.digits, &other.digits)
     }
 }
 
@@ -237,116 +251,92 @@ mod tests {
 
     #[test]
     fn add() {
-        let mut a = BigNum::from_bytes(&decode("01").unwrap());
-        let b = BigNum::from_bytes(&decode("01").unwrap());
-
-        a.add(&b);
-        assert_eq!(encode(&a.as_bytes()), "02");
+        let a = BigNum::from_bytes(&decode("01").unwrap());
+        let b = a.add(&a);
+        assert_eq!(encode(&b.as_bytes()), "02");
     }
 
     #[test]
     fn add_with_carry1() {
-        let mut a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
+        let a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
         let b = BigNum::from_bytes(&decode("01").unwrap());
-
-        a.add(&b);
-        assert_eq!(encode(&a.as_bytes()), "010000000000000000");
+        let c = a.add(&b);
+        assert_eq!(encode(&c.as_bytes()), "010000000000000000");
     }
 
     #[test]
     fn add_with_carry2() {
-        let mut a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
-        let b = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
-
-        a.add(&b);
-        assert_eq!(encode(&a.as_bytes()), "01fffffffffffffffe");
+        let a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
+        let b = a.add(&a);
+        assert_eq!(encode(&b.as_bytes()), "01fffffffffffffffe");
     }
 
     #[test]
     fn add_with_carry3() {
-        let mut a = BigNum::from_bytes(&decode("ffffffffffffffffffffffffffffffff").unwrap());
-        let b = BigNum::from_bytes(&decode("ffffffffffffffffffffffffffffffff").unwrap());
-
-        a.add(&b);
-        assert_eq!(encode(&a.as_bytes()), "01fffffffffffffffffffffffffffffffe");
+        let a = BigNum::from_bytes(&decode("ffffffffffffffffffffffffffffffff").unwrap());
+        let b = a.add(&a);
+        assert_eq!(encode(&b.as_bytes()), "01fffffffffffffffffffffffffffffffe");
     }
 
     #[test]
     fn add_with_carry4() {
-        let mut a = BigNum::from_bytes(&decode("ffffffffffffffffffffffffffffffff").unwrap());
+        let a = BigNum::from_bytes(&decode("ffffffffffffffffffffffffffffffff").unwrap());
         let b = BigNum::from_bytes(&decode("01").unwrap());
-
-        a.add(&b);
-        assert_eq!(encode(&a.as_bytes()), "0100000000000000000000000000000000");
+        let c = a.add(&b);
+        assert_eq!(encode(&c.as_bytes()), "0100000000000000000000000000000000");
     }
 
     #[test]
     fn sub() {
-        let mut a = BigNum::from_bytes(&decode("01").unwrap());
-        let b = BigNum::from_bytes(&decode("01").unwrap());
-
-        a.sub(&b);
-        assert_eq!(encode(&a.as_bytes()), "00");
+        let a = BigNum::from_bytes(&decode("01").unwrap());
+        let b = a.sub(&a);
+        assert_eq!(encode(&b.as_bytes()), "00");
     }
 
     #[test]
     fn sub_with_carry() {
-        let mut a = BigNum::from_bytes(&decode("0100000000000000000000000000000000").unwrap());
+        let a = BigNum::from_bytes(&decode("0100000000000000000000000000000000").unwrap());
         let b = BigNum::from_bytes(&decode("01").unwrap());
-
-        a.sub(&b);
-        assert_eq!(encode(&a.as_bytes()), "ffffffffffffffffffffffffffffffff");
+        let c = a.sub(&b);
+        assert_eq!(encode(&c.as_bytes()), "ffffffffffffffffffffffffffffffff");
     }
 
     #[test]
     #[should_panic]
     fn sub_negative() {
-        let mut a = BigNum::from_bytes(&decode("01").unwrap());
+        let a = BigNum::from_bytes(&decode("01").unwrap());
         let b = BigNum::from_bytes(&decode("02").unwrap());
-
         a.sub(&b);
     }
 
     #[test]
     fn mul() {
-        let mut a = BigNum::from_bytes(&decode("02").unwrap());
+        let a = BigNum::from_bytes(&decode("02").unwrap());
         let b = BigNum::from_bytes(&decode("03").unwrap());
-
-        a.mul(&b);
-        assert_eq!(encode(&a.as_bytes()), "06");
+        let c = a.mul(&b);
+        assert_eq!(encode(&c.as_bytes()), "06");
     }
 
     #[test]
     fn mul_big() {
-        let mut a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
+        let a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
         let b = BigNum::from_bytes(&decode("02").unwrap());
-
-        a.mul(&b);
-        assert_eq!(encode(&a.as_bytes()), "01fffffffffffffffe");
+        let c = a.mul(&b);
+        assert_eq!(encode(&c.as_bytes()), "01fffffffffffffffe");
     }
 
     #[test]
     fn mul_big2() {
-        let mut a = BigNum::from_bytes(&decode("ff01020304050607").unwrap());
-        let b = BigNum::from_bytes(&decode("ff01020304050607").unwrap());
-
-        for _ in 0..999 {
-            a.add(&b);
-        }
-
-        let mut c = BigNum::from_bytes(&decode("ff01020304050607").unwrap());
-        let d = BigNum::from_bytes(&decode("03e8").unwrap());
-
-        c.mul(&d);
-        assert_eq!(encode(&a.as_bytes()), encode(&c.as_bytes()));
+        let a = BigNum::from_bytes(&decode("ff01020304050607").unwrap());
+        let b = BigNum::from_bytes(&decode("03e8").unwrap());
+        let c = a.mul(&b);
+        assert_eq!(encode(&c.as_bytes()), "03e41befdbc7b39f8b58");
     }
 
     #[test]
     fn mul_big3() {
-        let mut a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
-        let b = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
-
-        a.mul(&b);
-        assert_eq!(encode(&a.as_bytes()), "fffffffffffffffe0000000000000001");
+        let a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
+        let b = a.mul(&a);
+        assert_eq!(encode(&b.as_bytes()), "fffffffffffffffe0000000000000001");
     }
 }
