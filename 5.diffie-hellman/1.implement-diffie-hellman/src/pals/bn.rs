@@ -31,7 +31,7 @@ fn cmp(lhs: &[u32], rhs: &[u32]) -> Ordering {
     Ordering::Equal
 }
 
-fn add_digit(out: &mut Vec<u32>, i: usize, num: u32) -> u32 {
+fn add_digit(out: &mut [u32], i: usize, num: u32) -> u32 {
     let overflow = out[i] > u32::max_value() - num;
     out[i] = out[i].wrapping_add(num);
 
@@ -42,27 +42,22 @@ fn add_digit(out: &mut Vec<u32>, i: usize, num: u32) -> u32 {
     }
 }
 
-fn add(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
-    let mut out = vec![0; max(lhs.len(), rhs.len()) + 1];
+fn add(lhs: &mut [u32], rhs: &[u32]) {
     let mut carry = 0;
+    let mut index = 0;
 
-    for i in 0..out.len() {
-        carry = add_digit(&mut out, i, carry);
-
-        if i < lhs.len() {
-            carry += add_digit(&mut out, i, lhs[i])
-        }
-
-        if i < rhs.len() {
-            carry += add_digit(&mut out, i, rhs[i]);
-        }
+    while index < rhs.len() {
+        carry = add_digit(lhs, index, carry) + add_digit(lhs, index, rhs[index]);
+        index += 1;
     }
 
-    truncate_zeroes(&mut out);
-    out
+    while index < lhs.len() {
+        carry = add_digit(lhs, index, carry);
+        index += 1;
+    }
 }
 
-fn sub_digit(out: &mut Vec<u32>, i: usize, num: u32) -> u32 {
+fn sub_digit(out: &mut [u32], i: usize, num: u32) -> u32 {
     let overflow = num > out[i];
     out[i] = out[i].wrapping_sub(num);
 
@@ -73,23 +68,21 @@ fn sub_digit(out: &mut Vec<u32>, i: usize, num: u32) -> u32 {
     }
 }
 
-fn sub(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
-    if cmp(lhs, rhs) == Ordering::Less {
-        panic!("cannot subtract larger value");
-    }
-
-    let mut out = lhs.to_vec();
+fn sub(lhs: &mut [u32], rhs: &[u32]) -> u32 {
     let mut carry = 0;
+    let mut index = 0;
 
-    for i in 0..out.len() {
-        carry = sub_digit(&mut out, i, carry);
-
-        if i < rhs.len() {
-            carry += sub_digit(&mut out, i, rhs[i]);
-        }
+    while index < rhs.len() {
+        carry = sub_digit(lhs, index, carry) + sub_digit(lhs, index, rhs[index]);
+        index += 1;
     }
 
-    out
+    while index < lhs.len() {
+        carry = sub_digit(lhs, index, carry);
+        index += 1;
+    }
+
+    carry
 }
 
 fn mul(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
@@ -115,15 +108,28 @@ fn mul(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
     out
 }
 
-// fn div_one(lhs: &mut [u32], denominator: u32) -> u32 {
-//     lhs.push(0); ?
-//
-//     loop {
-//         let numerator = ((lhs.last << 32) | lhs.last) as u64; 
-//         let quotient = numerator / denominator;
-//         let remainder = numerator % denominator;
-//     }
-// }
+fn div_one(lhs: &[u32], rhs: u32) -> (Vec<u32>, u32) {
+    let mut quotient = vec![0; lhs.len()];
+    let mut remainder = lhs.to_vec();
+
+    remainder.push(0);
+
+    for i in (0..remainder.len() - 1).rev() {
+        let lhs_digit = ((remainder[i + 1] as u64) << 32) | (remainder[i] as u64);
+        let rhs_digit = rhs as u64;
+
+        let quotient_digit = lhs_digit / rhs_digit;
+
+        let product = quotient_digit * rhs_digit;
+        let product_digits = [(product & 0xffffffff) as u32, (product >> 32) as u32];
+
+        sub(&mut remainder[i..], &product_digits);
+        quotient[i] = quotient_digit as u32;
+    }
+
+    truncate_zeroes(&mut quotient);
+    (quotient, remainder[0])
+}
 
 pub struct BigNum {
     digits: Vec<u32>,
@@ -145,7 +151,7 @@ impl BigNum {
             let end = bytes.len() - index;
 
             for i in start..end {
-                digit *= 256;
+                digit <<= 8;
                 digit += bytes[i] as u32;
             }
 
@@ -156,20 +162,16 @@ impl BigNum {
         BigNum { digits: digits }
     }
 
-    pub fn as_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
         for digit in self.digits.iter() {
-            let mut value = *digit;
-
-            for _ in 0..4 {
-                bytes.push((value % 256) as u8);
-                value /= 256;
+            for i in 0..4 {
+                bytes.push(((*digit >> (8 * i)) & 0xff) as u8);
             }
         }
 
         truncate_zeroes(&mut bytes);
-
         if bytes.len() == 0 {
             bytes.push(0);
         }
@@ -178,12 +180,48 @@ impl BigNum {
         bytes
     }
 
+    pub fn to_decimal(&self) -> String {
+        let mut decimal = Vec::new();
+        let mut value = self.digits.clone();
+
+        while value.len() > 0 {
+            let result = div_one(&value, 10);
+            decimal.push(b'0' + (result.1 as u8));
+            value = result.0;
+        }
+
+        truncate_zeroes(&mut decimal);
+        if decimal.len() == 0 {
+            decimal.push(b'0');
+        }
+
+        decimal.reverse();
+        String::from_utf8(decimal).unwrap()
+    }
+
     pub fn add(&self, rhs: &Self) -> Self {
-        BigNum { digits: add(&self.digits, &rhs.digits) }
+        let mut result = self.digits.clone();
+        result.push(0);
+
+        while result.len() < rhs.digits.len() + 1 {
+            result.push(0);
+        }
+
+        add(&mut result, &rhs.digits);
+
+        truncate_zeroes(&mut result);
+        BigNum { digits: result }
     }
 
     pub fn sub(&self, rhs: &Self) -> Self {
-        BigNum { digits: sub(&self.digits, &rhs.digits) }
+        let mut result = self.digits.clone();
+
+        if result.len() < rhs.digits.len() || sub(&mut result, &rhs.digits) != 0 {
+            panic!("cannot subtract larger value");
+        }
+
+        truncate_zeroes(&mut result);
+        BigNum { digits: result }
     }
 
     pub fn mul(&self, rhs: &Self) -> Self {
@@ -219,13 +257,13 @@ mod tests {
     #[test]
     fn hex_small() {
         let a = BigNum::from_bytes(&decode("0000000000000000000001").unwrap());
-        assert_eq!(encode(&a.as_bytes()), "01");
+        assert_eq!(encode(&a.to_bytes()), "01");
     }
 
     #[test]
     fn hex_large() {
         let a = BigNum::from_bytes(&decode("0100000000000000000000").unwrap());
-        assert_eq!(encode(&a.as_bytes()), "0100000000000000000000");
+        assert_eq!(encode(&a.to_bytes()), "0100000000000000000000");
     }
 
     #[test]
@@ -263,7 +301,7 @@ mod tests {
     fn add() {
         let a = BigNum::from_bytes(&decode("01").unwrap());
         let b = a.add(&a);
-        assert_eq!(encode(&b.as_bytes()), "02");
+        assert_eq!(encode(&b.to_bytes()), "02");
     }
 
     #[test]
@@ -271,21 +309,21 @@ mod tests {
         let a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
         let b = BigNum::from_bytes(&decode("01").unwrap());
         let c = a.add(&b);
-        assert_eq!(encode(&c.as_bytes()), "010000000000000000");
+        assert_eq!(encode(&c.to_bytes()), "010000000000000000");
     }
 
     #[test]
     fn add_with_carry2() {
         let a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
         let b = a.add(&a);
-        assert_eq!(encode(&b.as_bytes()), "01fffffffffffffffe");
+        assert_eq!(encode(&b.to_bytes()), "01fffffffffffffffe");
     }
 
     #[test]
     fn add_with_carry3() {
         let a = BigNum::from_bytes(&decode("ffffffffffffffffffffffffffffffff").unwrap());
         let b = a.add(&a);
-        assert_eq!(encode(&b.as_bytes()), "01fffffffffffffffffffffffffffffffe");
+        assert_eq!(encode(&b.to_bytes()), "01fffffffffffffffffffffffffffffffe");
     }
 
     #[test]
@@ -293,14 +331,14 @@ mod tests {
         let a = BigNum::from_bytes(&decode("ffffffffffffffffffffffffffffffff").unwrap());
         let b = BigNum::from_bytes(&decode("01").unwrap());
         let c = a.add(&b);
-        assert_eq!(encode(&c.as_bytes()), "0100000000000000000000000000000000");
+        assert_eq!(encode(&c.to_bytes()), "0100000000000000000000000000000000");
     }
 
     #[test]
     fn sub() {
         let a = BigNum::from_bytes(&decode("01").unwrap());
         let b = a.sub(&a);
-        assert_eq!(encode(&b.as_bytes()), "00");
+        assert_eq!(encode(&b.to_bytes()), "00");
     }
 
     #[test]
@@ -308,7 +346,7 @@ mod tests {
         let a = BigNum::from_bytes(&decode("0100000000000000000000000000000000").unwrap());
         let b = BigNum::from_bytes(&decode("01").unwrap());
         let c = a.sub(&b);
-        assert_eq!(encode(&c.as_bytes()), "ffffffffffffffffffffffffffffffff");
+        assert_eq!(encode(&c.to_bytes()), "ffffffffffffffffffffffffffffffff");
     }
 
     #[test]
@@ -324,7 +362,7 @@ mod tests {
         let a = BigNum::from_bytes(&decode("02").unwrap());
         let b = BigNum::from_bytes(&decode("03").unwrap());
         let c = a.mul(&b);
-        assert_eq!(encode(&c.as_bytes()), "06");
+        assert_eq!(encode(&c.to_bytes()), "06");
     }
 
     #[test]
@@ -332,7 +370,7 @@ mod tests {
         let a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
         let b = BigNum::from_bytes(&decode("02").unwrap());
         let c = a.mul(&b);
-        assert_eq!(encode(&c.as_bytes()), "01fffffffffffffffe");
+        assert_eq!(encode(&c.to_bytes()), "01fffffffffffffffe");
     }
 
     #[test]
@@ -340,13 +378,38 @@ mod tests {
         let a = BigNum::from_bytes(&decode("ff01020304050607").unwrap());
         let b = BigNum::from_bytes(&decode("03e8").unwrap());
         let c = a.mul(&b);
-        assert_eq!(encode(&c.as_bytes()), "03e41befdbc7b39f8b58");
+        assert_eq!(encode(&c.to_bytes()), "03e41befdbc7b39f8b58");
     }
 
     #[test]
     fn mul_big3() {
         let a = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
         let b = a.mul(&a);
-        assert_eq!(encode(&b.as_bytes()), "fffffffffffffffe0000000000000001");
+        assert_eq!(encode(&b.to_bytes()), "fffffffffffffffe0000000000000001");
+    }
+
+    #[test]
+    fn to_decimal0() {
+        let a = BigNum::from_bytes(&decode("00").unwrap());
+        assert_eq!(a.to_decimal(), "0");
+    }
+
+    #[test]
+    fn to_decimal1() {
+        let a = BigNum::from_bytes(&decode("01").unwrap());
+        assert_eq!(a.to_decimal(), "1");
+    }
+
+    #[test]
+    fn to_decimal2() {
+        let a = BigNum::from_bytes(&decode("bc614e").unwrap());
+        assert_eq!(a.to_decimal(), "12345678");
+    }
+
+    #[test]
+    fn to_decimal3() {
+        let a = BigNum::from_bytes(&decode("bc614e").unwrap());
+        let b = a.mul(&a).mul(&a).mul(&a).mul(&a);
+        assert_eq!(b.to_decimal(), "286797081492411793084216657371142368");
     }
 }
