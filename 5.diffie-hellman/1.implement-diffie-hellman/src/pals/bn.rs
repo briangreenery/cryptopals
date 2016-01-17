@@ -115,6 +115,16 @@ fn mul(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
     out
 }
 
+// fn div_one(lhs: &mut [u32], denominator: u32) -> u32 {
+//     lhs.push(0); ?
+//
+//     loop {
+//         let numerator = ((lhs.last << 32) | lhs.last) as u64; 
+//         let quotient = numerator / denominator;
+//         let remainder = numerator % denominator;
+//     }
+// }
+
 pub struct BigNum {
     digits: Vec<u32>,
 }
