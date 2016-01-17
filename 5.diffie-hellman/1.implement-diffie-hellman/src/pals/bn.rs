@@ -159,6 +159,7 @@ impl BigNum {
             index += 4;
         }
 
+        truncate_zeroes(&mut digits);
         BigNum { digits: digits }
     }
 
@@ -190,7 +191,6 @@ impl BigNum {
             value = result.0;
         }
 
-        truncate_zeroes(&mut decimal);
         if decimal.len() == 0 {
             decimal.push(b'0');
         }
@@ -201,8 +201,8 @@ impl BigNum {
 
     pub fn add(&self, rhs: &Self) -> Self {
         let mut result = self.digits.clone();
-        result.push(0);
 
+        result.push(0);
         while result.len() < rhs.digits.len() + 1 {
             result.push(0);
         }
@@ -225,7 +225,10 @@ impl BigNum {
     }
 
     pub fn mul(&self, rhs: &Self) -> Self {
-        BigNum { digits: mul(&self.digits, &rhs.digits) }
+        let mut result = mul(&self.digits, &rhs.digits);
+
+        truncate_zeroes(&mut result);
+        BigNum { digits: result }
     }
 }
 
@@ -396,8 +399,8 @@ mod tests {
 
     #[test]
     fn to_decimal1() {
-        let a = BigNum::from_bytes(&decode("01").unwrap());
-        assert_eq!(a.to_decimal(), "1");
+        let a = BigNum::from_bytes(&decode("0a").unwrap());
+        assert_eq!(a.to_decimal(), "10");
     }
 
     #[test]
