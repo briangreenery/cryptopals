@@ -8,8 +8,8 @@ fn main() {
     let mut num = pals::BigNum::from_bytes(&[1]);
     let two = pals::BigNum::from_bytes(&[2]);
 
-    for i in 0..201 {
-        println!("{}: {}", i, num.to_decimal());
+    for i in 0..257 {
+        println!("2^{} = {}", i, num.to_decimal());
         num = num.mul(&two);
     }
 }
