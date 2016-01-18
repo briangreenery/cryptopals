@@ -1,6 +1,6 @@
 use std::cmp::{min, max, Ordering, Eq, Ord, PartialEq, PartialOrd};
 
-fn truncate_zeroes<T: Eq + From<u8>>(digits: &mut Vec<T>) {
+fn trim<T: Eq + From<u8>>(digits: &mut Vec<T>) {
     let mut count = digits.len();
 
     for digit in digits.iter().rev() {
@@ -31,58 +31,38 @@ fn cmp(lhs: &[u32], rhs: &[u32]) -> Ordering {
     Ordering::Equal
 }
 
-fn add_digit(out: &mut [u32], i: usize, num: u32) -> u32 {
-    let overflow = out[i] > u32::max_value() - num;
-    out[i] = out[i].wrapping_add(num);
-
-    if overflow {
-        1
-    } else {
-        0
-    }
-}
-
 fn add(lhs: &mut [u32], rhs: &[u32]) {
     let mut carry = 0;
-    let mut index = 0;
 
-    while index < rhs.len() {
-        carry = add_digit(lhs, index, carry) + add_digit(lhs, index, rhs[index]);
-        index += 1;
+    for i in 0..rhs.len() {
+        let sum = (lhs[i] as u64) + (rhs[i] as u64) + carry;
+        lhs[i] = (sum & 0xffffffff) as u32;
+        carry = sum >> 32;
     }
 
-    while index < lhs.len() {
-        carry = add_digit(lhs, index, carry);
-        index += 1;
-    }
-}
-
-fn sub_digit(out: &mut [u32], i: usize, num: u32) -> u32 {
-    let overflow = num > out[i];
-    out[i] = out[i].wrapping_sub(num);
-
-    if overflow {
-        1
-    } else {
-        0
+    for i in rhs.len()..lhs.len() {
+        let sum = (lhs[i] as u64) + carry;
+        lhs[i] = (sum & 0xffffffff) as u32;
+        carry = sum >> 32;
     }
 }
 
 fn sub(lhs: &mut [u32], rhs: &[u32]) -> u32 {
     let mut carry = 0;
-    let mut index = 0;
 
-    while index < rhs.len() {
-        carry = sub_digit(lhs, index, carry) + sub_digit(lhs, index, rhs[index]);
-        index += 1;
+    for i in 0..rhs.len() {
+        let sum = ((1 << 32) + (lhs[i] as u64)) - (rhs[i] as u64) - carry;
+        lhs[i] = (sum & 0xffffffff) as u32;
+        carry = 1 - (sum >> 32);
     }
 
-    while index < lhs.len() {
-        carry = sub_digit(lhs, index, carry);
-        index += 1;
+    for i in rhs.len()..lhs.len() {
+        let sum = ((1 << 32) + (lhs[i] as u64)) - carry;
+        lhs[i] = (sum & 0xffffffff) as u32;
+        carry = 1 - (sum >> 32);
     }
 
-    carry
+    carry as u32
 }
 
 fn mul(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
@@ -108,45 +88,45 @@ fn mul(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
     out
 }
 
-fn div_by_one_digit(lhs: &[u32], rhs: u32, base: u64) -> (Vec<u32>, u32) {
-    let mut quotient = vec![0; lhs.len()];
+fn div_by_one_digit(lhs: &[u32], rhs: u32, quotient: &mut [u32]) -> u32 {
     let mut remainder = 0;
 
     for i in (0..lhs.len()).rev() {
-        let lhs_digit = (remainder * base) + (lhs[i] as u64);
+        let lhs_digit = (remainder << 32) + (lhs[i] as u64);
         let rhs_digit = rhs as u64;
 
         quotient[i] = (lhs_digit / rhs_digit) as u32;
         remainder = lhs_digit % rhs_digit;
     }
 
-    truncate_zeroes(&mut quotient);
-    (quotient, remainder as u32)
+    remainder as u32
 }
 
-fn base_1000_from_str(decimal: &str) -> Vec<u32> {
-    let chars = decimal.as_bytes();
+fn radix_convert(from: &mut [u32], from_base: u64, to_base: u64) -> Vec<u8> {
+    let mut to = Vec::new();
+    let mut len = from.len();
 
-    let mut digits = Vec::new();
-    let mut index = 0;
+    while len > 0 {
+        let mut remainder = 0;
 
-    while index < chars.len() {
-        let mut digit = 0;
-
-        let start = chars.len() - min(index + 3, chars.len());
-        let end = chars.len() - index;
-
-        for i in start..end {
-            digit *= 10;
-            digit += (chars[i] - b'0') as u32;
+        for i in (0..len).rev() {
+            let lhs = (remainder * from_base) + (from[i] as u64);
+            from[i] = (lhs / to_base) as u32;
+            remainder = lhs % to_base;
         }
 
-        digits.push(digit);
-        index += 3;
+        while len > 0 && from[len - 1] == 0 {
+            len -= 1;
+        }
+
+        to.push(remainder as u8);
     }
 
-    truncate_zeroes(&mut digits);
-    digits
+    to
+}
+
+fn base10_from_str(decimal: &str) -> Vec<u32> {
+    decimal.as_bytes().iter().rev().map(|digit| (digit - b'0') as u32).collect()
 }
 
 pub struct BigNum {
@@ -177,7 +157,7 @@ impl BigNum {
             index += 4;
         }
 
-        truncate_zeroes(&mut digits);
+        trim(&mut digits);
         BigNum { digits: digits }
     }
 
@@ -190,7 +170,8 @@ impl BigNum {
             }
         }
 
-        truncate_zeroes(&mut bytes);
+        trim(&mut bytes);
+
         if bytes.len() == 0 {
             bytes.push(0);
         }
@@ -200,66 +181,61 @@ impl BigNum {
     }
 
     pub fn from_decimal(decimal: &str) -> Self {
-        let mut bytes = Vec::new();
-        let mut value = base_1000_from_str(decimal);
+        let mut base10 = base10_from_str(decimal);
+        let mut base256 = radix_convert(&mut base10, 10, 256);
 
-        while value.len() > 0 {
-            let result = div_by_one_digit(&value, 256, 1000);
-            bytes.push(result.1 as u8);
-            value = result.0;
-        }
-
-        bytes.reverse();
-        Self::from_bytes(&bytes)
+        base256.reverse();
+        Self::from_bytes(&base256)
     }
 
     pub fn to_decimal(&self) -> String {
-        let mut decimal = Vec::new();
-        let mut value = self.digits.clone();
+        let mut digits = self.digits.clone();
+        let mut base10 = radix_convert(&mut digits, (1 << 32), 10);
 
-        while value.len() > 0 {
-            let result = div_by_one_digit(&value, 10, 0x100000000);
-            decimal.push(b'0' + (result.1 as u8));
-            value = result.0;
+        for digit in &mut base10 {
+            *digit += b'0';
         }
 
-        if decimal.len() == 0 {
-            decimal.push(b'0');
+        if base10.len() == 0 {
+            base10.push(b'0');
         }
 
-        decimal.reverse();
-        String::from_utf8(decimal).unwrap()
+        base10.reverse();
+        String::from_utf8(base10).unwrap()
     }
 
     pub fn add(&self, rhs: &Self) -> Self {
         let mut result = self.digits.clone();
 
-        result.push(0);
-        while result.len() < rhs.digits.len() + 1 {
+        while result.len() < max(self.digits.len(), rhs.digits.len()) + 1 {
             result.push(0);
         }
 
         add(&mut result, &rhs.digits);
 
-        truncate_zeroes(&mut result);
+        trim(&mut result);
         BigNum { digits: result }
     }
 
     pub fn sub(&self, rhs: &Self) -> Self {
         let mut result = self.digits.clone();
 
-        if result.len() < rhs.digits.len() || sub(&mut result, &rhs.digits) != 0 {
+        while result.len() < max(self.digits.len(), rhs.digits.len()) {
+            result.push(0);
+        }
+
+        if sub(&mut result, &rhs.digits) != 0 {
             panic!("cannot subtract larger value");
         }
 
-        truncate_zeroes(&mut result);
+        trim(&mut result);
         BigNum { digits: result }
     }
 
     pub fn mul(&self, rhs: &Self) -> Self {
         let mut result = mul(&self.digits, &rhs.digits);
 
-        truncate_zeroes(&mut result);
+        trim(&mut result);
         BigNum { digits: result }
     }
 }
@@ -393,6 +369,14 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn sub_negative2() {
+        let a = BigNum::from_bytes(&decode("01").unwrap());
+        let b = BigNum::from_bytes(&decode("ffffffffffffffff").unwrap());
+        a.sub(&b);
+    }
+
+    #[test]
     fn mul() {
         let a = BigNum::from_bytes(&decode("02").unwrap());
         let b = BigNum::from_bytes(&decode("03").unwrap());
@@ -453,5 +437,17 @@ mod tests {
         let number = "1238716238761387364853498121837294658376482763428319";
         let a = BigNum::from_decimal(number);
         assert_eq!(a.to_decimal(), number);
+    }
+
+    #[test]
+    fn from_decimal2() {
+        let a = BigNum::from_decimal("000001");
+        assert_eq!(a.to_decimal(), "1");
+    }
+
+    #[test]
+    fn from_decimal3() {
+        let a = BigNum::from_decimal("11");
+        assert_eq!(a.to_decimal(), "11");
     }
 }
