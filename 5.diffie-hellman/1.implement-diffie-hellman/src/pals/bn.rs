@@ -66,29 +66,25 @@ fn sub(lhs: &mut [u32], rhs: &[u32]) -> u32 {
 }
 
 fn mul(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
-    let mut out = vec![0; lhs.len() + rhs.len() + 1];
+    let mut out = vec![0; lhs.len() + rhs.len()];
 
-    for (lhs_index, lhs_digit) in lhs.iter().enumerate() {
-        let lhs_value = *lhs_digit as u64;
+    for i in 0..lhs.len() {
         let mut carry = 0;
 
-        for (rhs_index, rhs_digit) in rhs.iter().enumerate() {
-            let rhs_value = *rhs_digit as u64;
-            let out_value = out[lhs_index + rhs_index] as u64;
-
-            let product = lhs_value * rhs_value + out_value + carry;
-
-            out[lhs_index + rhs_index] = (product & 0xffffffff) as u32;
+        for j in 0..rhs.len() {
+            let product = (lhs[i] as u64) * (rhs[j] as u64) + (out[i + j] as u64) + carry;
+            out[i + j] = (product & 0xffffffff) as u32;
             carry = product >> 32;
         }
 
-        out[lhs_index + rhs.len()] = carry as u32;
+        out[i + rhs.len()] = carry as u32;
     }
 
     out
 }
 
-fn div_by_one_digit(lhs: &[u32], rhs: u32, quotient: &mut [u32]) -> u32 {
+fn div_by_one_digit(lhs: &[u32], rhs: u32) -> (Vec<u32>, Vec<u32>) {
+    let mut quotient = vec![0; lhs.len()];
     let mut remainder = 0;
 
     for i in (0..lhs.len()).rev() {
@@ -99,7 +95,31 @@ fn div_by_one_digit(lhs: &[u32], rhs: u32, quotient: &mut [u32]) -> u32 {
         remainder = lhs_digit % rhs_digit;
     }
 
-    remainder as u32
+    trim(&mut quotient);
+    (quotient, vec![remainder as u32])
+}
+
+fn div(lhs: &[u32], rhs: &[u32]) -> (Vec<u32>, Vec<u32>) {
+    if lhs.len() < rhs.len() {
+        return (Vec::new(), lhs.to_vec());
+    }
+
+    if rhs.len() == 1 {
+        return div_by_one_digit(&lhs, rhs[0]);
+    }
+
+    // // let shift = rhs[rhs.len() - 1].leading_zeros();
+
+    // loop {
+    //     let value = (remainder << 32) + (lhs[i] as u64);
+
+    // let qhat = value / rhs_1;
+
+
+    // }
+
+    // unshift
+    panic!("sdfl");
 }
 
 fn radix_convert(from: &mut [u32], from_base: u64, to_base: u64) -> Vec<u8> {
