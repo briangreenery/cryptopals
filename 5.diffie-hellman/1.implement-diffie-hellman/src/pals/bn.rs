@@ -126,7 +126,7 @@ fn div_by_one_digit(lhs: &[u32], rhs: u32, base: u64) -> (Vec<u32>, u32) {
     (quotient, remainder[0])
 }
 
-fn base_100000_from_str(decimal: &str) -> Vec<u32> {
+fn base_1000_from_str(decimal: &str) -> Vec<u32> {
     let chars = decimal.as_bytes();
 
     let mut digits = Vec::new();
@@ -135,7 +135,7 @@ fn base_100000_from_str(decimal: &str) -> Vec<u32> {
     while index < chars.len() {
         let mut digit = 0;
 
-        let start = chars.len() - min(index + 5, chars.len());
+        let start = chars.len() - min(index + 3, chars.len());
         let end = chars.len() - index;
 
         for i in start..end {
@@ -144,7 +144,7 @@ fn base_100000_from_str(decimal: &str) -> Vec<u32> {
         }
 
         digits.push(digit);
-        index += 5;
+        index += 3;
     }
 
     truncate_zeroes(&mut digits);
@@ -203,10 +203,10 @@ impl BigNum {
 
     pub fn from_decimal(decimal: &str) -> Self {
         let mut bytes = Vec::new();
-        let mut value = base_100000_from_str(decimal);
+        let mut value = base_1000_from_str(decimal);
 
         while value.len() > 0 {
-            let result = div_by_one_digit(&value, 256, 100000);
+            let result = div_by_one_digit(&value, 256, 1000);
             bytes.push(result.1 as u8);
             value = result.0;
         }
