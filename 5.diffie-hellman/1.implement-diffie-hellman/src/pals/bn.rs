@@ -108,27 +108,47 @@ fn mul(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
     out
 }
 
-fn div_one(lhs: &[u32], rhs: u32) -> (Vec<u32>, u32) {
+fn div_by_one_digit(lhs: &[u32], rhs: u32, base: u64) -> (Vec<u32>, u32) {
     let mut quotient = vec![0; lhs.len()];
-    let mut remainder = lhs.to_vec();
 
+    let mut remainder = lhs.to_vec();
     remainder.push(0);
 
     for i in (0..remainder.len() - 1).rev() {
-        let lhs_digit = ((remainder[i + 1] as u64) << 32) | (remainder[i] as u64);
+        let lhs_digit = ((remainder[i + 1] as u64) * base) + (remainder[i] as u64);
         let rhs_digit = rhs as u64;
 
-        let quotient_digit = lhs_digit / rhs_digit;
-
-        let product = quotient_digit * rhs_digit;
-        let product_digits = [(product & 0xffffffff) as u32, (product >> 32) as u32];
-
-        sub(&mut remainder[i..], &product_digits);
-        quotient[i] = quotient_digit as u32;
+        quotient[i] = (lhs_digit / rhs_digit) as u32;
+        remainder[i] = (lhs_digit % rhs_digit) as u32;
     }
 
     truncate_zeroes(&mut quotient);
     (quotient, remainder[0])
+}
+
+fn base_100000_from_str(decimal: &str) -> Vec<u32> {
+    let chars = decimal.as_bytes();
+
+    let mut digits = Vec::new();
+    let mut index = 0;
+
+    while index < chars.len() {
+        let mut digit = 0;
+
+        let start = chars.len() - min(index + 5, chars.len());
+        let end = chars.len() - index;
+
+        for i in start..end {
+            digit *= 10;
+            digit += (chars[i] - b'0') as u32;
+        }
+
+        digits.push(digit);
+        index += 5;
+    }
+
+    truncate_zeroes(&mut digits);
+    digits
 }
 
 pub struct BigNum {
@@ -136,11 +156,11 @@ pub struct BigNum {
 }
 
 impl BigNum {
-    pub fn new() -> BigNum {
+    pub fn new() -> Self {
         BigNum { digits: Vec::new() }
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> BigNum {
+    pub fn from_bytes(bytes: &[u8]) -> Self {
         let mut digits = Vec::new();
         let mut index = 0;
 
@@ -181,12 +201,26 @@ impl BigNum {
         bytes
     }
 
+    pub fn from_decimal(decimal: &str) -> Self {
+        let mut bytes = Vec::new();
+        let mut value = base_100000_from_str(decimal);
+
+        while value.len() > 0 {
+            let result = div_by_one_digit(&value, 256, 100000);
+            bytes.push(result.1 as u8);
+            value = result.0;
+        }
+
+        bytes.reverse();
+        Self::from_bytes(&bytes)
+    }
+
     pub fn to_decimal(&self) -> String {
         let mut decimal = Vec::new();
         let mut value = self.digits.clone();
 
         while value.len() > 0 {
-            let result = div_one(&value, 10);
+            let result = div_by_one_digit(&value, 10, 0x100000000);
             decimal.push(b'0' + (result.1 as u8));
             value = result.0;
         }
@@ -414,5 +448,12 @@ mod tests {
         let a = BigNum::from_bytes(&decode("bc614e").unwrap());
         let b = a.mul(&a).mul(&a).mul(&a).mul(&a);
         assert_eq!(b.to_decimal(), "286797081492411793084216657371142368");
+    }
+
+    #[test]
+    fn from_decimal() {
+        let number = "1238716238761387364853498121837294658376482763428319";
+        let a = BigNum::from_decimal(number);
+        assert_eq!(a.to_decimal(), number);
     }
 }
