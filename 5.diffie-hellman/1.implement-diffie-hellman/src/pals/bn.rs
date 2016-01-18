@@ -110,20 +110,18 @@ fn mul(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
 
 fn div_by_one_digit(lhs: &[u32], rhs: u32, base: u64) -> (Vec<u32>, u32) {
     let mut quotient = vec![0; lhs.len()];
+    let mut remainder = 0;
 
-    let mut remainder = lhs.to_vec();
-    remainder.push(0);
-
-    for i in (0..remainder.len() - 1).rev() {
-        let lhs_digit = ((remainder[i + 1] as u64) * base) + (remainder[i] as u64);
+    for i in (0..lhs.len()).rev() {
+        let lhs_digit = (remainder * base) + (lhs[i] as u64);
         let rhs_digit = rhs as u64;
 
         quotient[i] = (lhs_digit / rhs_digit) as u32;
-        remainder[i] = (lhs_digit % rhs_digit) as u32;
+        remainder = lhs_digit % rhs_digit;
     }
 
     truncate_zeroes(&mut quotient);
-    (quotient, remainder[0])
+    (quotient, remainder as u32)
 }
 
 fn base_1000_from_str(decimal: &str) -> Vec<u32> {
