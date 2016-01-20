@@ -5,14 +5,12 @@ extern crate crypto;
 extern crate rand;
 
 fn main() {
-    let one = pals::BigNum::from_decimal("1");
+    let num = pals::BigNum::new(2);
 
-    let mut factorial = pals::BigNum::from_decimal("1");
-    let mut number = pals::BigNum::from_decimal("1");
+    let mut product = pals::BigNum::new(1);
 
-    for i in 0..101 {
-        println!("{}! = {}", i, factorial.to_decimal());
-        factorial = factorial.mul(&number);
-        number = number.add(&one);
+    for i in 1..1001 {
+        product = product.mul(&num);
+        println!("{} = {}", i, product.to_decimal());
     }
 }

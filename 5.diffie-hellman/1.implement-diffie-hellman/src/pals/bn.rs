@@ -1,5 +1,11 @@
 use std::cmp::{min, max, Ordering, Eq, Ord, PartialEq, PartialOrd};
 
+fn zeropad(digits: &mut Vec<u32>, len: usize) {
+    while digits.len() < len {
+        digits.push(0);
+    }
+}
+
 fn trim<T: Eq + From<u8>>(digits: &mut Vec<T>) {
     let mut count = digits.len();
 
@@ -12,6 +18,23 @@ fn trim<T: Eq + From<u8>>(digits: &mut Vec<T>) {
     }
 
     digits.truncate(count);
+}
+
+fn lshift(digits: &mut [u32], amount: u32) {
+    for i in (1..digits.len()).rev() {
+        digits[i] = (digits[i] << amount) | (digits[i - 1] >> (32 - amount));
+    }
+
+    digits[0] <<= amount;
+}
+
+fn rshift(digits: &mut [u32], amount: u32) {
+    for i in 0..digits.len() - 1 {
+        digits[i] = (digits[i] >> amount) | (digits[i + 1] << (32 - amount));
+    }
+
+    let len = digits.len();
+    digits[len - 1] >>= amount;
 }
 
 fn cmp(lhs: &[u32], rhs: &[u32]) -> Ordering {
@@ -83,7 +106,7 @@ fn mul(lhs: &[u32], rhs: &[u32]) -> Vec<u32> {
     out
 }
 
-fn div_by_one_digit(lhs: &[u32], rhs: u32) -> (Vec<u32>, Vec<u32>) {
+fn div_by_one(lhs: &[u32], rhs: u32) -> (Vec<u32>, Vec<u32>) {
     let mut quotient = vec![0; lhs.len()];
     let mut remainder = 0;
 
@@ -99,27 +122,57 @@ fn div_by_one_digit(lhs: &[u32], rhs: u32) -> (Vec<u32>, Vec<u32>) {
     (quotient, vec![remainder as u32])
 }
 
+fn div_by_many(lhs: &[u32], rhs: &[u32]) -> (Vec<u32>, Vec<u32>) {
+    let shift = rhs[rhs.len() - 1].leading_zeros();
+
+    let u = Vec::new();
+    u.push(0);
+    u.extend(lhs);
+    lshift(&mut u, shift);
+
+    let v = rhs.clone();
+    lshift(&mut v, shift);
+
+    let m = lhs.len();
+    let n = rhs.len();
+
+    for j in (0..m - n + 1).rev() {
+        let lhs_digit = ((u[j + n] as u64) << 32) + (u[j + n - 1] as u64);
+        let rhs_digit = v[n - 1] as u64;
+
+        let mut qhat = lhs_digit / rhs_digit;
+        let mut rhat = lhs_digit % rhs_digit;
+
+        for _ in 0..2 {
+            if (qhat == (1 << 32)) ||
+               (qhat * (v[n - 2] as u64)) > ((rhat << 32) + (u[j + n - 2] as u64)) {
+                qhat -= 1;
+                rhat += v[n - 1];
+            }
+
+            if rhat >= (1 << 32) {
+                break;
+            }
+        }
+    }
+
+    (quotient, remainder)
+}
+
 fn div(lhs: &[u32], rhs: &[u32]) -> (Vec<u32>, Vec<u32>) {
+    if rhs.len() == 0 {
+        panic!("cannot divide by zero");
+    }
+
     if lhs.len() < rhs.len() {
         return (Vec::new(), lhs.to_vec());
     }
 
     if rhs.len() == 1 {
-        return div_by_one_digit(&lhs, rhs[0]);
+        return div_by_one(lhs, rhs[0]);
     }
 
-    // // let shift = rhs[rhs.len() - 1].leading_zeros();
-
-    // loop {
-    //     let value = (remainder << 32) + (lhs[i] as u64);
-
-    // let qhat = value / rhs_1;
-
-
-    // }
-
-    // unshift
-    panic!("sdfl");
+    return div_by_many(lhs, rhs);
 }
 
 fn radix_convert(from: &mut [u32], from_base: u64, to_base: u64) -> Vec<u8> {
@@ -154,8 +207,10 @@ pub struct BigNum {
 }
 
 impl BigNum {
-    pub fn new() -> Self {
-        BigNum { digits: Vec::new() }
+    pub fn new(num: u64) -> Self {
+        let mut digits = vec![(num & 0xffffffff) as u32, (num >> 32) as u32];
+        trim(&mut digits);
+        BigNum { digits: digits }
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
@@ -226,23 +281,15 @@ impl BigNum {
 
     pub fn add(&self, rhs: &Self) -> Self {
         let mut result = self.digits.clone();
-
-        while result.len() < max(self.digits.len(), rhs.digits.len()) + 1 {
-            result.push(0);
-        }
-
+        zeropad(&mut result, max(self.digits.len(), rhs.digits.len()) + 1);
         add(&mut result, &rhs.digits);
-
         trim(&mut result);
         BigNum { digits: result }
     }
 
     pub fn sub(&self, rhs: &Self) -> Self {
         let mut result = self.digits.clone();
-
-        while result.len() < max(self.digits.len(), rhs.digits.len()) {
-            result.push(0);
-        }
+        zeropad(&mut result, max(self.digits.len(), rhs.digits.len()));
 
         if sub(&mut result, &rhs.digits) != 0 {
             panic!("cannot subtract larger value");
@@ -330,9 +377,9 @@ mod tests {
 
     #[test]
     fn add() {
-        let a = BigNum::from_bytes(&decode("01").unwrap());
+        let a = BigNum::new(1);
         let b = a.add(&a);
-        assert_eq!(encode(&b.to_bytes()), "02");
+        assert_eq!(&b.to_decimal(), "2");
     }
 
     #[test]
@@ -367,9 +414,9 @@ mod tests {
 
     #[test]
     fn sub() {
-        let a = BigNum::from_bytes(&decode("01").unwrap());
+        let a = BigNum::new(1);
         let b = a.sub(&a);
-        assert_eq!(encode(&b.to_bytes()), "00");
+        assert_eq!(&b.to_decimal(), "0");
     }
 
     #[test]
