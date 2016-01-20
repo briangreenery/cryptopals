@@ -123,40 +123,41 @@ fn div_by_one(lhs: &[u32], rhs: u32) -> (Vec<u32>, Vec<u32>) {
 }
 
 fn div_by_many(lhs: &[u32], rhs: &[u32]) -> (Vec<u32>, Vec<u32>) {
-    let shift = rhs[rhs.len() - 1].leading_zeros();
+    panic!("hello");
+    // let shift = rhs[rhs.len() - 1].leading_zeros();
 
-    let u = Vec::new();
-    u.push(0);
-    u.extend(lhs);
-    lshift(&mut u, shift);
+    // let u = Vec::new();
+    // u.push(0);
+    // u.extend(lhs);
+    // lshift(&mut u, shift);
 
-    let v = rhs.clone();
-    lshift(&mut v, shift);
+    // let v = rhs.clone();
+    // lshift(&mut v, shift);
 
-    let m = lhs.len();
-    let n = rhs.len();
+    // let m = lhs.len();
+    // let n = rhs.len();
 
-    for j in (0..m - n + 1).rev() {
-        let lhs_digit = ((u[j + n] as u64) << 32) + (u[j + n - 1] as u64);
-        let rhs_digit = v[n - 1] as u64;
+    // for j in (0..m - n + 1).rev() {
+    //     let lhs_digit = ((u[j + n] as u64) << 32) + (u[j + n - 1] as u64);
+    //     let rhs_digit = v[n - 1] as u64;
 
-        let mut qhat = lhs_digit / rhs_digit;
-        let mut rhat = lhs_digit % rhs_digit;
+    //     let mut qhat = lhs_digit / rhs_digit;
+    //     let mut rhat = lhs_digit % rhs_digit;
 
-        for _ in 0..2 {
-            if (qhat == (1 << 32)) ||
-               (qhat * (v[n - 2] as u64)) > ((rhat << 32) + (u[j + n - 2] as u64)) {
-                qhat -= 1;
-                rhat += v[n - 1];
-            }
+    //     for _ in 0..2 {
+    //         if (qhat == (1 << 32)) ||
+    //            (qhat * (v[n - 2] as u64)) > ((rhat << 32) + (u[j + n - 2] as u64)) {
+    //             qhat -= 1;
+    //             rhat += v[n - 1];
+    //         }
 
-            if rhat >= (1 << 32) {
-                break;
-            }
-        }
-    }
+    //         if rhat >= (1 << 32) {
+    //             break;
+    //         }
+    //     }
+    // }
 
-    (quotient, remainder)
+    // (quotient, remainder)
 }
 
 fn div(lhs: &[u32], rhs: &[u32]) -> (Vec<u32>, Vec<u32>) {
@@ -175,7 +176,23 @@ fn div(lhs: &[u32], rhs: &[u32]) -> (Vec<u32>, Vec<u32>) {
     return div_by_many(lhs, rhs);
 }
 
-fn radix_convert(from: &mut [u32], from_base: u64, to_base: u64) -> Vec<u8> {
+trait FromU64 {
+    fn from_u64(value: u64) -> Self;
+}
+
+impl FromU64 for u32 {
+    fn from_u64(value: u64) -> Self {
+        value as u32
+    }
+}
+
+impl FromU64 for u8 {
+    fn from_u64(value: u64) -> Self {
+        value as u8
+    }
+}
+
+fn radix_convert<T: FromU64>(from: &mut [u32], from_base: u64, to_base: u64) -> Vec<T> {
     let mut to = Vec::new();
     let mut len = from.len();
 
@@ -192,7 +209,7 @@ fn radix_convert(from: &mut [u32], from_base: u64, to_base: u64) -> Vec<u8> {
             len -= 1;
         }
 
-        to.push(remainder as u8);
+        to.push(T::from_u64(remainder));
     }
 
     to
@@ -257,17 +274,16 @@ impl BigNum {
 
     pub fn from_decimal(decimal: &str) -> Self {
         let mut base10 = base10_from_str(decimal);
-        let mut base256 = radix_convert(&mut base10, 10, 256);
+        let digits = radix_convert(&mut base10, 10, (1 << 32));
 
-        base256.reverse();
-        Self::from_bytes(&base256)
+        BigNum { digits: digits }
     }
 
     pub fn to_decimal(&self) -> String {
         let mut digits = self.digits.clone();
         let mut base10 = radix_convert(&mut digits, (1 << 32), 10);
 
-        for digit in &mut base10 {
+        for digit in base10.iter_mut() {
             *digit += b'0';
         }
 
@@ -282,7 +298,9 @@ impl BigNum {
     pub fn add(&self, rhs: &Self) -> Self {
         let mut result = self.digits.clone();
         zeropad(&mut result, max(self.digits.len(), rhs.digits.len()) + 1);
+
         add(&mut result, &rhs.digits);
+
         trim(&mut result);
         BigNum { digits: result }
     }
@@ -516,5 +534,11 @@ mod tests {
     fn from_decimal3() {
         let a = BigNum::from_decimal("11");
         assert_eq!(a.to_decimal(), "11");
+    }
+
+    #[test]
+    fn from_decimal4() {
+        let a = BigNum::from_decimal("111");
+        assert_eq!(a.to_decimal(), "111");
     }
 }
