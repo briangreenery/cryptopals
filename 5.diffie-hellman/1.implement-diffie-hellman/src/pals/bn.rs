@@ -124,14 +124,12 @@ fn div_by_one(lhs: &[u32], rhs: u32) -> (Vec<u32>, Vec<u32>) {
     (quotient, vec![remainder as u32])
 }
 
-fn mul_sub(u: &mut [u32], v: &[u32], qhat: u64) -> u64 {
-    let n = v.len();
-
+fn mul_sub(u: &mut [u32], v: &[u32], q: u64) -> u64 {
     let mut mul_carry = 0;
     let mut sub_carry = 0;
 
-    for i in 0..n {
-        let product = qhat * (v[i] as u64) + mul_carry;
+    for i in 0..v.len() {
+        let product = q * (v[i] as u64) + mul_carry;
         let sum = (BASE + (u[i] as u64)) - (product & 0xffffffff) - sub_carry;
 
         u[i] = (sum & 0xffffffff) as u32;
@@ -140,8 +138,8 @@ fn mul_sub(u: &mut [u32], v: &[u32], qhat: u64) -> u64 {
         sub_carry = 1 - (sum >> 32);
     }
 
-    let sum = (BASE + (u[n] as u64)) - mul_carry - sub_carry;
-    u[n] = (sum & 0xffffffff) as u32;
+    let sum = (BASE + (u[v.len()] as u64)) - mul_carry - sub_carry;
+    u[v.len()] = (sum & 0xffffffff) as u32;
 
     1 - (sum >> 32)
 }
@@ -182,24 +180,24 @@ fn div_by_many(lhs: &[u32], rhs: &[u32]) -> (Vec<u32>, Vec<u32>) {
         let lhs_digit = ((u[j + n] as u64) << 32) + (u[j + n - 1] as u64);
         let rhs_digit = v[n - 1] as u64;
 
-        let mut qhat = lhs_digit / rhs_digit;
-        let mut rhat = lhs_digit % rhs_digit;
+        let mut q = lhs_digit / rhs_digit;
+        let mut r = lhs_digit % rhs_digit;
 
-        while qhat >= BASE || qhat * (v[n - 2] as u64) > (rhat << 32) + (u[j + n - 2] as u64) {
-            qhat -= 1;
-            rhat += v[n - 1] as u64;
+        while q >= BASE || q * (v[n - 2] as u64) > (r << 32) + (u[j + n - 2] as u64) {
+            q -= 1;
+            r += v[n - 1] as u64;
 
-            if rhat >= BASE {
+            if r >= BASE {
                 break;
             }
         }
 
-        if mul_sub(&mut u[j..j + n + 1], &v, qhat) != 0 {
-            qhat -= 1;
+        if mul_sub(&mut u[j..j + n + 1], &v, q) != 0 {
+            q -= 1;
             add(&mut u[j..j + n + 1], &v);
         }
 
-        quotient[j] = qhat as u32;
+        quotient[j] = q as u32;
     }
 
     let mut remainder = denormalize(u, shift);
