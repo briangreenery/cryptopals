@@ -372,6 +372,30 @@ impl BigNum {
         let (quotient, remainder) = div(&self.digits, &rhs.digits);
         (BigNum { digits: quotient }, BigNum { digits: remainder })
     }
+
+    pub fn modexp(&self, exponent: &Self, modulus: &Self) -> Self {
+        let mut result = vec![1];
+        let mut saw_bit = false;
+
+        for digit in exponent.digits.iter().rev() {
+            for i in (0..32).rev() {
+                let is_set = (digit & (1 << i)) != 0;
+
+                if saw_bit {
+                    result = div(&mul(&result, &result), &modulus.digits).1;
+
+                    if is_set {
+                        result = div(&mul(&result, &self.digits), &modulus.digits).1;
+                    }
+                } else if is_set {
+                    saw_bit = true;
+                    result = div(&mul(&result, &self.digits), &modulus.digits).1;
+                }
+            }
+        }
+
+        BigNum { digits: result }
+    }
 }
 
 impl Ord for BigNum {
@@ -674,5 +698,25 @@ mod tests {
 
         assert_eq!(q.to_decimal(), "3");
         assert_eq!(r.to_decimal(), "9903520314283042199192993792");
+    }
+
+    #[test]
+    fn modexp1() {
+        let n = BigNum::new(2);
+        let e = BigNum::new(0);
+        let m = BigNum::new(10);
+        let r = n.modexp(&e, &m);
+
+        assert_eq!(r.to_decimal(), "1");
+    }
+
+    #[test]
+    fn modexp2() {
+        let n = BigNum::new(2);
+        let e = BigNum::new(1024);
+        let m = BigNum::new(10);
+        let r = n.modexp(&e, &m);
+
+        assert_eq!(r.to_decimal(), "6");
     }
 }
