@@ -45,14 +45,8 @@ fn main() {
     let a_session = b_public.modexp(&a_private, &prime);
     let b_session = a_public.modexp(&b_private, &prime);
 
-    println!("a session key {}", pals::hex::encode(&a_session.to_bytes()));
-    println!("");
-    println!("b session key {}", pals::hex::encode(&b_session.to_bytes()));
-    println!("");
-    
-    if a_session == b_session {
-        println!("keys are equal");
-    } else {
-        println!("keys are NOT equal (wtf?!?!!)");
-    }
+    println!("a session key = {}",
+             pals::hex::encode(&pals::sha1::hash(&a_session.to_bytes())));
+    println!("b session key = {}",
+             pals::hex::encode(&pals::sha1::hash(&b_session.to_bytes())));
 }
