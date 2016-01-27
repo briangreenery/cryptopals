@@ -2,6 +2,9 @@ const BASE: u64 = 0x100000000;
 
 use std::cmp::{min, max, Ordering, Eq, Ord, PartialEq, PartialOrd};
 
+extern crate rand;
+use rand::Rng;
+
 fn zeropad(digits: &mut Vec<u32>, len: usize) {
     while digits.len() < len {
         digits.push(0);
@@ -337,6 +340,19 @@ impl BigNum {
 
         base10.reverse();
         String::from_utf8(base10).unwrap()
+    }
+
+    pub fn random_less_than(limit: &BigNum) -> Self {
+        let mut exponent_bytes = vec![0; limit.to_bytes().len()];
+
+        loop {
+            rand::thread_rng().fill_bytes(&mut exponent_bytes);
+            let number = BigNum::from_bytes(&exponent_bytes);
+
+            if &number < limit {
+                return number;
+            }
+        }
     }
 
     pub fn clone(&self) -> Self {

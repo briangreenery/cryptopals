@@ -13,3 +13,6 @@ pub mod md4;
 
 pub mod bn;
 pub use self::bn::BigNum;
+
+pub mod dsa;
+pub use self::dsa::DSA;
