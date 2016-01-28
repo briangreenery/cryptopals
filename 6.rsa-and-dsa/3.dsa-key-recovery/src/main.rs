@@ -58,7 +58,9 @@ fn main() {
         let y2 = g.modexp(&x, &p);
 
         if y == y2 {
-            println!("private key is: {}", pals::hex::encode(&x.to_bytes()));
+            let hex = pals::hex::encode(&x.to_bytes());
+            let sha1 = pals::hex::encode(&pals::sha1::hash(hex.as_bytes()));
+            println!("private key is: {} (sha1: {})", hex, sha1);
             break;
         }
 
