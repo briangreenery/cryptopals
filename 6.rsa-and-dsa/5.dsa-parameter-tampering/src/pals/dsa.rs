@@ -23,7 +23,7 @@ impl DSA {
         }
     }
 
-    pub fn public_key<'a>(&'a self) -> &'a BigNum {
+    pub fn public_key(&self) -> &BigNum {
         &self.y
     }
 
