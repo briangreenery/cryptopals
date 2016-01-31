@@ -5,36 +5,33 @@ extern crate crypto;
 extern crate rand;
 
 use pals::BigNum;
-use std::fmt;
+use rand::Rng;
 
 struct RSA {
     n: BigNum,
     e: BigNum,
     d: BigNum,
+    size: usize,
 }
 
 impl RSA {
     fn new(p: &BigNum, q: &BigNum) -> RSA {
+        let one = BigNum::new(1);
         let n = p.mul(&q);
-        let et = p.sub(&BigNum::new(1)).mul(&q.sub(&BigNum::new(1)));
+        let et = p.sub(&one).mul(&q.sub(&one));
         let e = BigNum::new(3);
         let d = e.modinv(&et);
-        RSA { n: n, e: e, d: d }
+        let size = n.to_bytes().len();
+        RSA {
+            n: n,
+            e: e,
+            d: d,
+            size: size,
+        }
     }
 
-    fn encrypt(&self, plain: &[u8]) -> BigNum {
-        let size = self.n.to_bytes().len();
-
-        if plain.len() >= size {
-            panic!("text to encrypt is too big");
-        }
-
-        let mut bytes = plain.to_vec();
-        while bytes.len() + 1 < size {
-            bytes.push(0);
-        }
-
-        BigNum::from_bytes(&bytes).modexp(&self.e, &self.n)
+    fn encrypt(&self, plain: &BigNum) -> BigNum {
+        plain.modexp(&self.e, &self.n)
     }
 
     fn decrypt(&self, cipher: &BigNum) -> BigNum {
@@ -42,96 +39,73 @@ impl RSA {
     }
 }
 
-fn is_even(key: &RSA, cipher: &BigNum) -> bool {
-    let number = key.decrypt(&cipher);
+fn pkcs15_pad(data: &[u8], size: usize) -> Vec<u8> {
+    let mut padding = vec![0; size];
 
-    if number.div(&BigNum::new(2)).1 == BigNum::new(0) {
-        true
-    } else {
-        false
+    if data.len() + 11 > size {
+        panic!("data too large");
     }
+
+    padding[1] = 2;
+
+    let mut rng = rand::thread_rng();
+    for i in 2..size - data.len() - 1 {
+        while padding[i] == 0 {
+            padding[i] = rng.gen()
+        }
+    }
+
+    for (i, byte) in data.iter().enumerate() {
+        padding[size - data.len() + i] = *byte;
+    }
+
+    padding
 }
 
-struct Midpoint {
-    whole: BigNum,
-    numerator: BigNum,
-    denominator: BigNum,
+fn pkcs15_unpad(padding: &[u8]) -> Option<&[u8]> {
+    if padding.len() < 11 {
+        return None;
+    }
+
+    if padding[0] != 0 {
+        return None;
+    }
+
+    if padding[1] != 2 {
+        return None;
+    }
+
+    for i in 2..10 {
+        if padding[i] == 0 {
+            return None;
+        }
+    }
+
+    for i in 10..padding.len() {
+        if padding[i] == 0 {
+            return Some(&padding[i + 1..]);
+        }
+    }
+
+    return None;
 }
 
-impl Midpoint {
-    fn new(whole: &BigNum) -> Midpoint {
-        Midpoint {
-            whole: whole.clone(),
-            numerator: BigNum::new(0),
-            denominator: BigNum::new(1),
-        }
-    }
+fn pkcs15_is_valid(key: &RSA, ciphertext: &BigNum) -> bool {
+    let plain = key.decrypt(&ciphertext).to_bytes();
 
-    fn div_by_2(&self) -> Self {
-        let improper = self.whole.mul(&self.denominator).add(&self.numerator);
-        let denominator = self.denominator.mul(&BigNum::new(2));
+    let mut buffer = vec![0; key.size - plain.len()];
+    buffer.extend(&plain);
 
-        let (q, r) = improper.div(&denominator);
-
-        Midpoint {
-            whole: q,
-            numerator: r,
-            denominator: denominator,
-        }
-    }
-
-    fn add(&self, other: &Self) -> Self {
-        let one = BigNum::new(1);
-        let two = BigNum::new(2);
-
-        let mut whole = self.whole.clone();
-        let mut numerator = self.numerator.clone();
-        let mut denominator = self.denominator.clone();
-
-        assert!(denominator < other.denominator);
-
-        while denominator != other.denominator {
-            numerator = numerator.mul(&two);
-            denominator = denominator.mul(&two);
-        }
-
-        whole = whole.add(&other.whole);
-        numerator = numerator.add(&other.numerator);
-
-        while numerator > denominator {
-            whole = whole.add(&one);
-            numerator = numerator.sub(&denominator);
-        }
-
-        Midpoint {
-            whole: whole,
-            numerator: numerator,
-            denominator: denominator,
-        }
-    }
-
-    fn floor(&self) -> BigNum {
-        self.whole.clone()
-    }
-
-    fn ceiling(&self) -> BigNum {
-        if self.numerator == BigNum::new(0) {
-            self.whole.clone()
-        } else {
-            self.whole.add(&BigNum::new(1))
-        }
-    }
-}
-
-impl fmt::Display for Midpoint {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "{} + {}/{}",
-               self.whole.to_decimal(),
-               self.numerator.to_decimal(),
-               self.denominator.to_decimal())
-    }
+    pkcs15_unpad(&buffer).is_some()
 }
 
 fn main() {
+    let p = BigNum::from_bytes(&pals::hex::decode("F29710A696210BD8C1FE4C6A5A22873D").unwrap());
+    let q = BigNum::from_bytes(&pals::hex::decode("C268B715B7AF1C3312D9BAB054F710C9").unwrap());
+    let key = RSA::new(&p, &q);
+
+    let padded = pkcs15_pad("kick it, CC".as_bytes(), key.size);
+    let ciphertext = key.encrypt(&BigNum::from_bytes(&padded));
+
+    let is_valid = pkcs15_is_valid(&key, &ciphertext);
 }
