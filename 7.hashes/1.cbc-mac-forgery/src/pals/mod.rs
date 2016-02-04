@@ -16,3 +16,5 @@ pub use self::bn::BigNum;
 
 pub mod dsa;
 pub use self::dsa::DSA;
+
+pub mod cookie;
