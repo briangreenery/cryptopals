@@ -18,3 +18,16 @@ pub mod dsa;
 pub use self::dsa::DSA;
 
 pub mod cookie;
+
+pub fn printable(bytes: &[u8]) -> String {
+    let sanitized = bytes.iter()
+                         .map(|byte| {
+                             match *byte {
+                                 32...126 => *byte,
+                                 _ => b'.',
+                             }
+                         })
+                         .collect();
+
+    String::from_utf8(sanitized).unwrap()
+}

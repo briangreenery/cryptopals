@@ -45,21 +45,41 @@ fn cbc_mac_2(data: &[u8], key: &[u8]) -> Vec<u8> {
     encrypted[encrypted.len() - 16..].to_vec()
 }
 
-fn verify_request_2(key: &[u8], message: &str, mac: &[u8]) {
-    if cbc_mac_2(message.as_bytes(), key) == mac {
-        let req = pals::cookie::parse(message);
-        println!("Verified: From {}: {}.", req["from"], req["tx_list"]);
+fn verify_request_2(key: &[u8], message: &[u8], mac: &[u8]) {
+    if cbc_mac_2(message, key) == mac {
+        println!("Verified: {}", pals::printable(message));
     } else {
         println!("Invalid signature!");
     }
 }
 
 fn part2() {
+    // Real message.
     let key = pals::aes::random_key();
-    let message = "from=unsuspectin&tx_list=hodor:1M";
-    let mac = cbc_mac_2(message.as_bytes(), &key);
-
+    let message = b"from=unsuspectin&tx_list=hodor:1M;bran:1M";
+    let mac = cbc_mac_2(message, &key);
     verify_request_2(&key, message, &mac);
+
+    // Message we send with "evil:1M" in the tx_list.
+    let message2 = b"from=ab&tx_list=asdf:1;evil:1M";
+    let mac2 = cbc_mac_2(message2, &key);
+    verify_request_2(&key, message2, &mac2);
+
+    // Compute mac ^ first block of our message.
+    let mut evil_iv = [0; 16];
+    pals::aes::xor(&mac, &mut evil_iv);
+    pals::aes::xor(&message2[0..16], &mut evil_iv);
+
+    // Craft the message.
+    let last_block_start = 16 * (message.len() / 16);
+
+    let mut evil_message = Vec::new();
+    evil_message.extend(&message[0..last_block_start]);
+    evil_message.extend(&pals::aes::pad(&message[last_block_start..], 16));
+    evil_message.extend(&evil_iv);
+    evil_message.extend(&message2[16..]);
+
+    verify_request_2(&key, &evil_message, &mac2);
 }
 
 fn main() {
